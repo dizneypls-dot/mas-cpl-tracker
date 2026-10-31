@@ -37,6 +37,7 @@ const ICON = {
   school: 'M5,13.18v4L12,21l7,-3.82v-4L12,17l-7,-3.82zM12,3L1,9l11,6 9,-4.91V17h2V9L12,3z',
   report: 'M19,3H5c-1.1,0 -2,0.9 -2,2v14c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2V5c0,-1.1 -0.9,-2 -2,-2zM9,17H7v-7h2v7zM13,17h-2V7h2v10zM17,17h-2v-4h2v4z',
   android: 'M17.6,9.48l1.84,-3.18c0.16,-0.31 0.04,-0.69 -0.26,-0.85 -0.29,-0.15 -0.65,-0.06 -0.83,0.22l-1.88,3.24c-2.86,-1.21 -6.08,-1.21 -8.94,0L5.65,5.67c-0.19,-0.29 -0.58,-0.38 -0.87,-0.2 -0.28,0.18 -0.37,0.54 -0.22,0.83L6.4,9.48C3.3,11.25 1.28,14.44 1,18h22C22.72,14.44 20.7,11.25 17.6,9.48zM7,15.25c-0.69,0 -1.25,-0.56 -1.25,-1.25S6.31,12.75 7,12.75 8.25,13.31 8.25,14 7.69,15.25 7,15.25zM17,15.25c-0.69,0 -1.25,-0.56 -1.25,-1.25s0.56,-1.25 1.25,-1.25 1.25,0.56 1.25,1.25S17.69,15.25 17,15.25z',
+  spark: 'M19,9l1.25,-2.75L23,5l-2.75,-1.25L19,1l-1.25,2.75L15,5l2.75,1.25L19,9zM11.5,9.5L9,4 6.5,9.5 1,12l5.5,2.5L9,20l2.5,-5.5L17,12l-5.5,-2.5zM19,15l-1.25,2.75L15,19l2.75,1.25L19,23l1.25,-2.75L23,19l-2.75,-1.25L19,15z',
   sync: 'M12,4V1L8,5l4,4V6c3.31,0 6,2.69 6,6 0,1.01 -0.25,1.97 -0.7,2.8l1.46,1.46C19.54,15.03 20,13.57 20,12c0,-4.42 -3.58,-8 -8,-8zM12,18c-3.31,0 -6,-2.69 -6,-6 0,-1.01 0.25,-1.97 0.7,-2.8L5.24,7.74C4.46,8.97 4,10.43 4,12c0,4.42 3.58,8 8,8v3l4,-4 -4,-4v3z',
 };
 const icon = (n, cls = 'i') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICON[n]}"/></svg>`;
@@ -305,10 +306,10 @@ function frame(title, sub, actions, content) {
   const nav = [['students', 'Students', 'people'], ['overview', 'Overview', 'dashboard'], ['uploads', 'Uploads', 'upload'], ['account', 'Account', 'person']];
   const live = Store.status === 'Live';
   return `<div class="shell"><aside class="side"><div class="brand"><img src="logos/mas.png" alt="Moorabbin Aviation Services"><span class="sep"></span><img src="logos/anac.png" alt="Australian National Airline College"></div>
-  <div class="kicker">CPL Progress Tracker</div><nav>${nav.map(([k, l, i]) => `<a href="#/${k}" class="${(r.page === k || (k === 'students' && r.page === 'student')) ? 'on' : ''}">${icon(i)}<span>${l}</span></a>`).join('')}</nav><div class="grow"></div>
+  <div class="kicker">CPL Progress Tracker</div><nav>${nav.map(([k, l, i]) => `<a href="#/${k}" class="${(r.page === k || (k === 'students' && r.page === 'student') || (k === 'uploads' && r.page === 'scan')) ? 'on' : ''}">${icon(i)}<span>${l}</span></a>`).join('')}</nav><div class="grow"></div>
   <div class="me">${avatar(Store.meta.user, 36)}<div><b>${esc(Store.meta.user || '')}</b><small>${live ? '● Live' : esc(Store.status)}</small></div></div></aside>
   <div class="main"><header class="top ${ui.searching ? 'searching' : ''}">${title}${sub ? `<span class="sub">${sub}</span>` : ''}${actions || ''}</header><main class="content" id="content">${content}</main></div></div>
-  <nav class="mnav">${nav.map(([k, l, i]) => `<a href="#/${k}" class="${(r.page === k || (k === 'students' && r.page === 'student')) ? 'on' : ''}"><span>${icon(i)}</span>${l}</a>`).join('')}</nav>`;
+  <nav class="mnav">${nav.map(([k, l, i]) => `<a href="#/${k}" class="${(r.page === k || (k === 'students' && r.page === 'student') || (k === 'uploads' && r.page === 'scan')) ? 'on' : ''}"><span>${icon(i)}</span>${l}</a>`).join('')}</nav>`;
 }
 
 function render() {
@@ -319,6 +320,7 @@ function render() {
   if (r.page === 'student') studentPage(r.uid, r.tab);
   else if (r.page === 'overview') overview();
   else if (r.page === 'uploads') uploads();
+  else if (r.page === 'scan') scanPage(r.uid);
   else if (r.page === 'account') account();
   else students();
   if (same) window.scrollTo(0, y); else window.scrollTo(0, 0);
@@ -590,6 +592,8 @@ function uploads() {
   app.innerHTML = frame('<h1>Uploads</h1>', 'Fill in records from your files', '', `
    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose files to upload">${icon('upload')}<h2>Drop files here, or click to choose</h2><div class="muted">Everything is shown for review first. Then it’s saved to the shared database for everyone.</div><input type="file" id="files" multiple hidden></div>
    <div id="reviewSlot"></div>
+   <div class="card claude" style="margin-top:16px"><div class="ch">${icon('spark')}<div><h2>Read with Claude</h2><div class="sub">Any other file: a screenshot, photo, PDF, Excel or CSV. Claude reads it, matches each person to a student and lists the changes for you to approve. Nothing is saved until you approve it.</div></div><button class="btn gold" id="scanBtn">${icon('upload')}<span>Choose a file</span></button><input type="file" id="scanFile" accept="image/*,.pdf,.csv,.txt,.tsv,.xlsx,.json" hidden></div>
+    <div id="scans" class="scans"></div></div>
    <div class="card" style="margin-top:16px"><h2>What you can upload</h2><div class="kinds">
     ${[['Smart flight activity report (.csv)', 'Every flight: lessons, hours, instructors and hour reviews. Any date range; flights already imported are skipped.'], ['Smart event cancellation report (.csv)', 'Student-caused cancellations become attendance. Sick counts only with a medical certificate.'], ['Smart exports and your own spreadsheets', 'CSV or Excel. Columns are matched automatically and you can change them before applying.'], ['Tracker backups and PDF records', 'Excel/JSON/HTML backups from the tracker, and text PDF training records (not scans).']].map(([b, s]) => `<div class="kind">${icon('file')}<div><b>${b}</b><small>${s}</small></div></div>`).join('')}</div></div>`);
   $('#reviewSlot').append(importer.reviewEl);
@@ -600,6 +604,103 @@ function uploads() {
   for (const ev of ['dragenter', 'dragover']) drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); });
   for (const ev of ['dragleave', 'drop']) drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); });
   drop.addEventListener('drop', e => importer.upload([...e.dataTransfer.files]));
+  const sf = $('#scanFile');
+  $('#scanBtn').onclick = () => sf.click();
+  sf.onchange = () => { const f = sf.files[0]; sf.value = ''; if (f) Scans.upload(f); };
+  Scans.list();
+}
+
+// ---------- Claude scans ----------
+const MIME = {png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', pdf: 'application/pdf', csv: 'text/csv', txt: 'text/plain', tsv: 'text/tab-separated-values', json: 'application/json', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'};
+const Scans = {
+  items: [], timer: null,
+  async upload(f) {
+    const mime = MIME[(f.name.split('.').pop() || '').toLowerCase()] || f.type;
+    if (!Object.values(MIME).includes(mime)) return toast('Claude can read photos, screenshots, PDFs, Excel (.xlsx) and CSV files.');
+    if (f.size > 15 * 1024 * 1024) return toast('That file is over 15 MB.');
+    toast('Uploading ' + f.name + '…');
+    try {
+      const data = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = () => rej(r.error); r.readAsDataURL(f); });
+      await Store.api('POST', '/api/scan', {name: f.name, mime, data});
+      toast('Claude is reading ' + f.name + '. This usually takes under a minute.');
+      this.list();
+    } catch (e) { toast(e.message || 'Upload failed.'); }
+  },
+  async list() {
+    try { this.items = (await Store.api('GET', '/api/scans')).scans || []; } catch (e) { }
+    const box = $('#scans'); if (!box) return;
+    box.innerHTML = this.items.length ? this.items.map(j => {
+      const st = j.status === 'reading' ? '<span class="pill navy"><span class="spin"></span>Reading…</span>' : j.status === 'ready' ? `<span class="pill amber">Review ${j.count} change${j.count === 1 ? '' : 's'}</span>` : j.status === 'applied' ? `<span class="pill green">Saved ${j.applied || 0}</span>` : j.status === 'failed' ? '<span class="pill red">Could not read</span>' : '<span class="pill">Discarded</span>';
+      return `<div class="li ${j.status === 'ready' || j.status === 'applied' ? '' : 'static'}" data-scan="${j.id}">${icon('file')}<div class="t"><b>${esc(j.name)}</b><small>${esc(j.error || j.summary || '')}</small><small>${esc(j.by)} · ${ago(j.created)}</small></div>${st}</div>`;
+    }).join('') : '<div class="muted" style="padding:12px 2px 0">No files read yet.</div>';
+    box.onclick = e => { const x = e.target.closest('[data-scan]'); const j = x && this.items.find(i => i.id === x.dataset.scan); if (j && (j.status === 'ready' || j.status === 'applied')) go('scan/' + j.id); };
+    clearTimeout(this.timer);
+    if (this.items.some(j => j.status === 'reading')) this.timer = setTimeout(() => { if (route().page === 'uploads') this.list(); }, 3000);
+  },
+};
+
+async function scanPage(id) {
+  document.title = 'Review · CPL Tracker';
+  const back = `<button class="icon-btn" onclick="history.length > 1 ? history.back() : location.hash = '#/uploads'" aria-label="Back">${icon('back')}</button>`;
+  if (scanPage.job?.id !== id) {
+    app.innerHTML = frame(back + '<h1>Review</h1>', '', '', '<div class="empty"><span class="spin big"></span><div>Loading…</div></div>');
+    try { scanPage.job = await Store.api('GET', '/api/scan/' + id); scanPage.pick = null; } catch (e) { app.innerHTML = frame(back + '<h1>Review</h1>', '', '', `<div class="empty">${esc(e.message)}</div>`); return; }
+    if (route().page !== 'scan') return;
+  }
+  const j = scanPage.job, done = j.status !== 'ready';
+  const names = new Map(Store.all().map(r => [r.uid, r.state.name]));
+  const opts = [...names].sort((a, b) => a[1].localeCompare(b[1]));
+  if (!scanPage.pick) {
+    scanPage.pick = new Set(j.changes.filter(c => !c.problem && c.confidence !== 'low' && c.uid).map(c => c.i));
+    scanPage.assign = {};
+  }
+  const pick = scanPage.pick, assign = scanPage.assign;
+  const groups = new Map();
+  for (const c of j.changes) { const k = c.uid || 'name:' + norm(c.name_in_document); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(c); }
+  const row = c => {
+    const bad = c.problem && c.problem !== 'already recorded';
+    const dis = done || !!c.problem;
+    if (done && c.saved) c.confidence = 'saved';
+    const when = c.date ? auDate(c.date) : '';
+    return `<label class="chg ${c.problem ? 'off' : ''}"><input type="checkbox" data-i="${c.i}" ${(done ? c.saved : pick.has(c.i)) ? 'checked' : ''} ${dis ? 'disabled' : ''}>
+     <div class="t"><b>${esc(c.label)}</b><div class="ba">${c.kind === 'attendance' ? esc(c.before) + ' · ' : c.before ? `<s>${esc(c.before)}</s> → ` : ''}<span class="to">${esc(c.after)}</span>${when ? ' · ' + when : ''}${c.attempts > 1 && c.kind === 'exam' ? ' · ' + c.attempts + ' attempts' : ''}</div>
+     ${c.note ? `<small>${esc(c.note)}</small>` : ''}<small class="why">${esc(c.reason)}</small>${c.problem ? `<small class="${bad ? 'bad' : ''}">${esc(bad ? c.problem : 'Already recorded')}</small>` : ''}</div>
+     ${c.confidence === 'saved' ? '<span class="pill green">Saved</span>' : c.confidence !== 'high' ? `<span class="pill ${c.confidence === 'low' ? 'red' : 'amber'}">${c.confidence === 'low' ? 'Unsure' : 'Check'}</span>` : ''}</label>`;
+  };
+  const head = (k, cs) => {
+    const c = cs[0];
+    if (c.uid) return `<div class="gh">${avatar(c.studentName, 34)}<div><b>${esc(c.studentName)}</b>${norm(c.name_in_document) !== norm(c.studentName) ? `<small>“${esc(c.name_in_document)}” in the file</small>` : ''}</div></div>`;
+    const v = assign[k] || '';
+    return `<div class="gh">${avatar(c.name_in_document, 34)}<div><b>${esc(c.name_in_document || 'Unknown person')}</b><small class="bad">Not matched to a student</small></div>
+      <select data-assign="${esc(k)}" ${done ? 'disabled' : ''}><option value="">Skip</option><option value="new" ${v === 'new' ? 'selected' : ''}>Add as a new student</option>${opts.map(([u, n]) => `<option value="${u}" ${v === u ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>`;
+  };
+  const usable = j.changes.filter(c => !c.problem).length;
+  const status = j.status === 'applied' ? `<div class="note green">${icon('check')}Saved ${j.applied} change${j.applied === 1 ? '' : 's'} · approved by ${esc(j.appliedBy)}</div>${(j.skipped || []).length ? `<div class="note">${j.skipped.map(esc).join('<br>')}</div>` : ''}` : j.status === 'discarded' ? '<div class="note">Discarded. Nothing was saved.</div>' : '';
+  app.innerHTML = frame(back + '<h1>Review</h1>', esc(j.name), '', `
+   <div class="card claude"><div class="ch">${icon('spark')}<div><h2>${esc(j.documentType || 'Document')}</h2><div class="sub">${esc(j.summary || '')}</div></div></div>
+    ${(j.warnings || []).map(w => `<div class="note amber">${esc(w)}</div>`).join('')}${status}
+    <div class="muted" style="margin-top:10px;font-size:13px">${j.changes.length} change${j.changes.length === 1 ? '' : 's'} found · ${usable} new · read by Claude for ${esc(j.by)} ${ago(j.created)}. Unsure items are not ticked; check them against the file.</div></div>
+   ${[...groups].map(([k, cs]) => { const known = cs.filter(x => x.problem === 'already recorded'), rest = cs.filter(x => x.problem !== 'already recorded'); return `<div class="card grp">${head(k, cs)}${rest.map(row).join('')}${known.length ? `<details class="known"><summary>${known.length} already recorded</summary>${known.map(row).join('')}</details>` : ''}</div>`; }).join('') || '<div class="empty">Claude found nothing to change in this file.</div>'}
+   ${done ? '' : `<div class="approve"><span id="cnt"></span><button class="btn" id="disc">Discard</button><button class="btn" id="all">Tick all</button><button class="btn primary" id="ok">${icon('check')}<span>Approve</span></button></div>`}`);
+  const c = $('#content');
+  const count = () => { const n = [...pick].filter(i => { const x = j.changes[i]; return x.uid || assign[x.uid || 'name:' + norm(x.name_in_document)]; }).length; const e = $('#cnt'); if (e) e.textContent = n + ' selected'; const ok = $('#ok'); if (ok) { ok.disabled = !n; ok.querySelector('span').textContent = 'Approve ' + n; } return n; };
+  c.onchange = e => {
+    const t = e.target;
+    if (t.dataset.i) { t.checked ? pick.add(+t.dataset.i) : pick.delete(+t.dataset.i); }
+    if (t.dataset.assign !== undefined) { assign[t.dataset.assign] = t.value; for (const x of groups.get(t.dataset.assign)) { if (t.value && !x.problem) pick.add(x.i); else pick.delete(x.i); } scanPage(id); return; }
+    count();
+  };
+  if (done) return;
+  count();
+  $('#all').onclick = () => { for (const x of j.changes) if (!x.problem && (x.uid || assign['name:' + norm(x.name_in_document)])) pick.add(x.i); scanPage(id); };
+  $('#disc').onclick = async () => { if (!confirm('Discard this file? Nothing from it will be saved.')) return; try { await Store.api('POST', '/api/scan/' + id + '/discard', {}); scanPage.job = null; toast('Discarded'); go('uploads'); } catch (e) { toast(e.message); } };
+  $('#ok').onclick = async () => {
+    const accept = [...pick].filter(i => { const x = j.changes[i]; return x.uid || assign['name:' + norm(x.name_in_document)]; });
+    const asg = {}; for (const i of accept) { const x = j.changes[i]; if (!x.uid) asg[i] = assign['name:' + norm(x.name_in_document)]; }
+    $('#ok').disabled = true;
+    try { const r = await Store.api('POST', '/api/scan/' + id + '/apply', {accept, assign: asg}); toast('Saved ' + r.applied + ' change' + (r.applied === 1 ? '' : 's')); scanPage.job = await Store.api('GET', '/api/scan/' + id); scanPage(id); }
+    catch (e) { toast(e.message); $('#ok').disabled = false; }
+  };
 }
 
 // ---------- account ----------

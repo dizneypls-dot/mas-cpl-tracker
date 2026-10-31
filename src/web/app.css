@@ -279,3 +279,44 @@ svg.i{width:22px;height:22px;fill:currentColor;flex:0 0 auto}
 @media print{.side,.top,.mnav,.tabs,.btn,.icon-btn{display:none!important}.shell{display:block}.content{padding:0}.card,.list,.hero{box-shadow:none}}
 .lastf b{display:block;font-size:13.5px;font-weight:600;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lastf small{color:var(--muted);font-size:12px}
 .nextcard svg.i:first-child{flex:0 0 auto}
+
+/* Claude scans */
+.claude .ch{display:flex;align-items:flex-start;gap:14px}
+.claude .ch>svg.i{width:30px;height:30px;color:var(--gold);flex:0 0 auto;margin-top:2px}
+.claude .ch>div{flex:1;min-width:0}
+.claude .ch .btn{flex:0 0 auto}
+.scans{margin-top:12px}
+.scans .li{padding:11px 4px;border-bottom:1px solid var(--line2)}
+.scans .li:last-child{border-bottom:0}
+.scans .li>svg.i{width:22px;height:22px;color:var(--teal);flex:0 0 auto}
+.spin{display:inline-block;width:11px;height:11px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite;margin-right:4px;vertical-align:-1px}
+.spin.big{width:28px;height:28px;border-width:3px;color:var(--teal);margin:0 0 10px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.note{margin-top:12px;padding:10px 14px;border-radius:12px;background:var(--chip);font-size:13.5px;display:flex;gap:8px;align-items:flex-start}
+.note.amber{background:var(--amber-bg);color:var(--amber)}.note.green{background:var(--green-bg);color:var(--green);font-weight:600}
+.note svg.i{width:18px;height:18px;flex:0 0 auto}
+.grp{margin-top:14px;padding:6px 0}
+.gh{display:flex;align-items:center;gap:12px;padding:10px 20px 10px;border-bottom:1px solid var(--line2)}
+.gh>div{flex:1;min-width:0}.gh b{display:block;font-size:15px}.gh small{display:block;color:var(--muted);font-size:12.5px}
+.gh select{height:40px;border:1px solid var(--line);border-radius:10px;padding:0 10px;background:#f8fafc;max-width:46%}
+.bad{color:var(--red)!important}
+.chg{display:flex;align-items:flex-start;gap:12px;padding:11px 20px;border-bottom:1px solid var(--line2);cursor:pointer}
+.chg:last-child{border-bottom:0}
+.chg.off{opacity:.6;cursor:default}
+.chg input{width:20px;height:20px;margin-top:2px;accent-color:var(--navy);flex:0 0 auto}
+.chg .t{flex:1;min-width:0}.chg .t b{font-size:14.5px;font-weight:600}
+.chg .ba{font-size:13.5px;margin-top:2px}.chg .ba s{color:var(--muted)}.chg .ba .to{font-weight:700;color:var(--navy)}
+.chg small{display:block;font-size:12.5px;color:var(--muted);margin-top:2px}
+.chg small.why{font-style:italic}
+.approve{position:sticky;bottom:12px;margin-top:16px;display:flex;align-items:center;gap:10px;background:var(--surface);border-radius:16px;box-shadow:0 8px 30px #0b2a4f2e;padding:10px 12px 10px 18px;z-index:5}
+.approve #cnt{flex:1;font-weight:600;color:var(--muted)}
+@media (max-width:760px){
+  .claude .ch{flex-wrap:wrap}.claude .ch .btn{width:100%}
+  .gh{flex-wrap:wrap}.gh select{max-width:100%;width:100%}
+  .chg,.gh{padding-left:16px;padding-right:16px}
+  .approve{bottom:calc(76px + env(safe-area-inset-bottom));padding:8px}
+  .approve #all{display:none}
+}
+.known summary{padding:10px 20px;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;list-style:none}
+.known summary::before{content:'▸ '}.known[open] summary::before{content:'▾ '}
+.known summary::-webkit-details-marker{display:none}

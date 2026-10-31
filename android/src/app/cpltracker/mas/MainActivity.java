@@ -34,6 +34,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 // Home of the app: students list, overview dashboard, uploads and account, with a bottom navigation bar.
@@ -61,6 +62,21 @@ public class MainActivity extends Activity implements Store.Listener {
         store = Store.get(this);
         if (store.signedIn()) { showMain(); store.start(); Updater.check(this, false); Diag.sendPending(this); }
         else showLogin();
+        shared(getIntent());
+    }
+
+    @Override protected void onNewIntent(Intent i) { super.onNewIntent(i); setIntent(i); shared(i); }
+
+    // A file shared to the app from WhatsApp, Photos, Files or email goes straight to Claude to read.
+    private void shared(Intent i) {
+        if (i == null || !Intent.ACTION_SEND.equals(i.getAction())) return;
+        Uri u = i.getParcelableExtra(Intent.EXTRA_STREAM);
+        i.setAction(Intent.ACTION_MAIN);
+        if (u == null) { Ui.toast(this, "Share a file (a screenshot, photo, PDF or spreadsheet)."); return; }
+        if (!store.signedIn()) { Ui.toast(this, "Sign in first, then share the file again."); return; }
+        tab = "upload";
+        if (content != null) render();
+        ScanActivity.upload(this, u);
     }
 
     @Override protected void onResume() { super.onResume(); store.listen(this); store.resume(); if (store.signedIn() && content != null) refresh(); }
@@ -627,12 +643,13 @@ public class MainActivity extends Activity implements Store.Listener {
         c.addView(Ui.text(this, "Smart flight activity reports and cancellation reports fill in lessons, flights, hour reviews and attendance for every student. Everything you import is shown for review first, then saved to the shared database for everyone.", 14, Ui.MUTED, false));
         c.addView(Ui.button(this, "Choose files", true, v -> Importer.pick(this)), Ui.margins(this, 0, 16, 0, 0));
         box.addView(c, Ui.margins(this, 0, 0, 0, 14));
+        box.addView(claudeCard(), Ui.margins(this, 0, 0, 0, 14));
         LinearLayout k = Ui.card(this);
         k.addView(Ui.title(this, "What you can upload", 17, Ui.NAVY));
         String[][] kinds = {
                 {"Smart flight activity report (.csv)", "Every flight: lessons, hours, instructors. Upload any date range; flights already imported are skipped."},
                 {"Smart event cancellation report (.csv)", "Student-caused cancellations become attendance (sick without a certificate counts as absent)."},
-                {"Spreadsheets, PDFs and tracker backups", "Use the website on a computer for these: Students › Upload records."}};
+                {"Anything else, read by Claude", "Screenshots, photos of paper forms, PDFs, Excel and CSV files: exam results, attendance sheets, training records. Tip: share a file to CPL Tracker from WhatsApp, Photos or Files."}};
         for (String[] x : kinds) {
             LinearLayout r = Ui.row(this);
             r.setGravity(Gravity.TOP);
@@ -654,7 +671,81 @@ public class MainActivity extends Activity implements Store.Listener {
     @Override
     protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
+        if (req == ScanActivity.PICK) { if (res == RESULT_OK && data != null && data.getData() != null) ScanActivity.upload(this, data.getData()); return; }
         Importer.result(this, req, res, data);
+    }
+
+    // ---------- Claude ----------
+    private static JSONArray scans;
+    private static long scansAt;
+    private LinearLayout scanList;
+
+    private View claudeCard() {
+        LinearLayout c = Ui.card(this);
+        LinearLayout r = Ui.row(this);
+        r.setGravity(Gravity.TOP);
+        r.addView(Ui.icon(this, R.drawable.ic_spark, Ui.GOLD, 30));
+        LinearLayout m = Ui.col(this);
+        m.setPadding(Ui.dp(this, 12), 0, 0, 0);
+        m.addView(Ui.title(this, "Read with Claude", 19, Ui.NAVY));
+        m.addView(Ui.text(this, "Any other file: a screenshot, photo, PDF, Excel or CSV. Claude reads it, matches each person to a student and lists the changes for you to approve. Nothing is saved until you approve it.", 14, Ui.MUTED, false));
+        r.addView(m, Ui.weight(1));
+        c.addView(r);
+        TextView b = Ui.button(this, "Choose a file", false, v -> ScanActivity.pick(this));
+        b.setTextColor(Color.WHITE);
+        b.setBackground(Ui.ripple(Ui.round(Ui.GOLD, Ui.dp(this, 12)), Ui.round(0xFF000000, Ui.dp(this, 12))));
+        c.addView(b, Ui.margins(this, 0, 14, 0, 4));
+        scanList = Ui.col(this);
+        c.addView(scanList);
+        showScans();
+        if (scans == null || System.currentTimeMillis() - scansAt > 4000) loadScans();
+        return c;
+    }
+
+    private void loadScans() {
+        scansAt = System.currentTimeMillis();
+        ScanActivity.NET.execute(() -> {
+            try {
+                JSONArray a = new JSONObject(store.api("GET", "/api/scans", null)).getJSONArray("scans");
+                runOnUiThread(() -> { scans = a; showScans(); });
+            } catch (Exception ignored) { }
+        });
+    }
+
+    private void showScans() {
+        if (scanList == null) return;
+        scanList.removeAllViews();
+        if (scans == null) return;
+        boolean reading = false;
+        for (int i = 0; i < scans.length(); i++) {
+            JSONObject j = scans.optJSONObject(i);
+            String st = j.optString("status");
+            reading |= "reading".equals(st);
+            scanList.addView(Ui.divider(this), Ui.margins(this, 0, i == 0 ? 10 : 0, 0, 0));
+            LinearLayout row = Ui.row(this);
+            row.setPadding(0, Ui.dp(this, 10), 0, Ui.dp(this, 10));
+            row.addView(Ui.icon(this, R.drawable.ic_file, Ui.TEAL, 22));
+            LinearLayout t = Ui.col(this);
+            t.setPadding(Ui.dp(this, 12), 0, Ui.dp(this, 8), 0);
+            t.addView(Ui.ellipsize(Ui.text(this, j.optString("name"), 15, Ui.TEXT, true)));
+            String sub = !j.optString("error").isEmpty() && !"null".equals(j.optString("error")) ? j.optString("error") : j.optString("summary");
+            if (!sub.isEmpty() && !"null".equals(sub)) { TextView s2 = Ui.text(this, sub, 12.5f, Ui.MUTED, false); s2.setMaxLines(2); s2.setEllipsize(android.text.TextUtils.TruncateAt.END); t.addView(s2); }
+            t.addView(Ui.text(this, j.optString("by") + " · " + ago(j.optLong("created")), 12, Ui.MUTED, false));
+            row.addView(t, Ui.weight(1));
+            int n = j.optInt("count");
+            if ("reading".equals(st)) row.addView(Ui.pill(this, "Reading…", Ui.NAVY, Ui.NAVY_TINT));
+            else if ("ready".equals(st)) row.addView(Ui.pill(this, "Review " + n, Ui.AMBER, Ui.AMBER_BG));
+            else if ("applied".equals(st)) row.addView(Ui.pill(this, "Saved " + j.optInt("applied"), Ui.GREEN, Ui.GREEN_BG));
+            else if ("failed".equals(st)) row.addView(Ui.pill(this, "Could not read", Ui.RED, Ui.RED_BG));
+            else row.addView(Ui.pill(this, "Discarded", Ui.MUTED, Ui.CHIP_BG));
+            if (!"failed".equals(st) && !"discarded".equals(st)) {
+                String sid = j.optString("id");
+                row.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x220B2A4F), null, null));
+                row.setOnClickListener(v -> startActivity(new Intent(this, ScanActivity.class).putExtra("id", sid)));
+            }
+            scanList.addView(row);
+        }
+        if (reading) scanList.postDelayed(() -> { if ("upload".equals(tab) && scanList != null && scanList.isAttachedToWindow()) loadScans(); }, 3000);
     }
 
     // ---------- account ----------

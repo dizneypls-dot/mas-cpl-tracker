@@ -345,6 +345,9 @@ final class Store {
 
     void post(String path, String body) throws Exception { http("POST", server(), path, code(), body); }
 
+    /** A call to the tracker server with this phone's access code (used by the Claude review screens). */
+    String api(String method, String path, String body) throws Exception { return http(method, server(), path, code(), body); }
+
     synchronized int pending() { int n = 0; for (Rec r : recs.values()) if (r.dirty) n++; return n; }
 
     private void setStatus(String s) {
@@ -463,9 +466,11 @@ final class Store {
         c.setRequestProperty("Authorization", "Bearer " + code);
         c.setRequestProperty("Accept-Encoding", "gzip");
         if (body != null) {
+            byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
             c.setDoOutput(true);
+            c.setFixedLengthStreamingMode(bytes.length);
             c.setRequestProperty("Content-Type", "application/json");
-            try (OutputStream o = c.getOutputStream()) { o.write(body.getBytes(StandardCharsets.UTF_8)); }
+            try (OutputStream o = c.getOutputStream()) { o.write(bytes); }
         }
         int status = c.getResponseCode();
         InputStream in = status >= 400 ? c.getErrorStream() : c.getInputStream();

@@ -1,6 +1,6 @@
 {
- "versionCode": 10,
- "versionName": "2.0.3",
+ "versionCode": 11,
+ "versionName": "2.1.0",
  "apk": "CPLTracker.apk",
- "notes": "Shows the last lesson each student flew, and the real next lesson."
+ "notes": "Read with Claude: upload or share any screenshot, photo, PDF or spreadsheet; Claude proposes record changes for you to review and approve."
 }

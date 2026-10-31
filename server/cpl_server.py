@@ -19,22 +19,48 @@ API (JSON, header  Authorization: Bearer <code>):
                                                else saved first (the app merges and retries)
     DELETE /api/students/<uid>              (admin)
     GET    /api/audit?limit=200             (admin) who changed what, newest first
+    POST   /api/scan                        body {"name", "mime", "data" (base64)} -> {"id"}
+                                               Claude reads the file and proposes record changes
+    GET    /api/scans                       recent scans (yours; an admin sees everyone's)
+    GET    /api/scan/<id>                   status and the proposed changes
+    POST   /api/scan/<id>/apply             body {"accept": [index...], "assign": {"<index>": uid | "new"}}
+                                               saves only the approved changes
+    POST   /api/scan/<id>/discard
+
+The Claude key lives in DATA/claude.key (set with:  cpl_server.py set-claude-key  and paste it).
 """
 import argparse
+import base64
+import copy
 import hashlib
 import json
 import os
 import re
 import secrets
 import signal
+import subprocess
 import sys
 import threading
 import time
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 DATA = os.environ.get("CPL_DATA", "/var/lib/cpl-tracker")
 MAX_BODY = 2 * 1024 * 1024
+MAX_UPLOAD = 15 * 1024 * 1024
+HERE = os.path.dirname(os.path.abspath(__file__))
+SCAN_PY = os.environ.get("CPL_SCAN_PYTHON", os.path.join(HERE, "venv", "bin", "python"))
+SCAN_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp", "image/gif": ".gif", "application/pdf": ".pdf",
+              "text/csv": ".csv", "text/plain": ".txt", "text/tab-separated-values": ".tsv", "application/json": ".json",
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx"}
+EXAM_NAMES = {"FROL": "Flight Radio Operator Licence", "Pre-Solo": "Pre-solo exam", "Pre-Area Solo": "Pre-area solo exam",
+              "RPCT": "RPL conversion theory", "RPLA": "RPL (Aeroplane) theory exam", "CMET": "CPL Meteorology",
+              "CFPA": "CPL Flight Planning", "CADA": "CPL Aerodynamics", "CNAV": "CPL Navigation", "CLWA": "CPL Air Law",
+              "CHUF": "CPL Human Factors", "CSYA": "CPL Aircraft Systems"}
+ATT_VALUES = ("Present", "Late", "Absent", "Sick (certificate)")
+DETAIL_FIELDS = {"studentId": "Student ID", "instructor": "Instructor", "course": "Course", "start": "Course start"}
+scan_slots = threading.Semaphore(2)
 UID = re.compile(r"^[A-Za-z0-9-]{8,64}$")
 
 lock = threading.Lock()
@@ -118,6 +144,295 @@ def describe(old, new):
     return "; ".join(parts)[:600] or "no visible change"
 
 
+# ---- Claude document scans -------------------------------------------------------------------------------
+# An upload is read by Claude in a separate process (cpl_scan.py, in its own virtual environment). Claude only
+# proposes changes; they are saved when a person approves them with /apply, under that person's name.
+
+_catalogue = None
+
+
+def catalogue():
+    global _catalogue
+    if _catalogue is None:
+        _catalogue = read_json_abs(os.path.join(HERE, "catalogue.json"), {"order": [], "lessons": {}, "template": {}})
+    return _catalogue
+
+
+def read_json_abs(p, default):
+    try:
+        with open(p) as f:
+            return json.load(f)
+    except (FileNotFoundError, ValueError):
+        return default
+
+
+def scan_dir(sid):
+    return path(os.path.join("scans", sid))
+
+
+def load_job(sid):
+    if not re.fullmatch(r"[a-f0-9]{24}", sid or ""):
+        return None
+    return read_json_abs(os.path.join(scan_dir(sid), "job.json"), None)
+
+
+def save_job(job):
+    d = scan_dir(job["id"])
+    tmp = os.path.join(d, "job.json.tmp")
+    with open(tmp, "w") as f:
+        json.dump(job, f, separators=(",", ":"))
+    os.replace(tmp, os.path.join(d, "job.json"))
+
+
+def claude_key():
+    try:
+        with open(path("claude.key")) as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return os.environ.get("ANTHROPIC_API_KEY", "")
+
+
+def lesson_label(lid):
+    v = catalogue()["lessons"].get(str(lid))
+    return f"{lid}. {v['name']}" if v else f"Lesson {lid}"
+
+
+def start_scan(u, name, mime, data):
+    sid = secrets.token_hex(12)
+    d = scan_dir(sid)
+    os.makedirs(path("scans"), mode=0o700, exist_ok=True)
+    os.makedirs(d, mode=0o700)
+    fname = "upload" + SCAN_TYPES[mime]
+    with open(os.path.join(d, fname), "wb") as f:
+        f.write(data)
+    with lock:
+        live = [(k, r["state"]) for k, r in db["students"].items() if not r.get("deleted")]
+    live.sort(key=lambda x: (x[1].get("name") or "").lower())
+    refs, roster = {}, []
+    for i, (uid, st) in enumerate(live, 1):
+        ref = f"S{i}"
+        refs[ref] = uid
+        roster.append({"ref": ref, "name": st.get("name", ""), "studentId": st.get("studentId", ""), "course": st.get("course", ""), "instructor": st.get("instructor", "")})
+    cat = catalogue()
+    with open(os.path.join(d, "context.json"), "w") as f:
+        json.dump({"roster": roster, "lessons": {k: v["name"] for k, v in cat["lessons"].items()}, "exams": EXAM_NAMES}, f)
+    job = {"id": sid, "name": name[:200], "mime": mime, "file": fname, "size": len(data), "by": u["name"], "role": u["role"],
+           "created": int(time.time() * 1000), "today": time.strftime("%Y-%m-%d"), "status": "reading", "refs": refs}
+    save_job(job)
+    audit(u, "scan", "", "", f"uploaded {job['name']} for Claude to read")
+    threading.Thread(target=run_scan, args=(sid,), daemon=True, name="scan-" + sid).start()
+    return sid
+
+
+def run_scan(sid):
+    job = load_job(sid)
+    d = scan_dir(sid)
+    with scan_slots:
+        try:
+            key = claude_key()
+            if not key:
+                raise RuntimeError("Claude is not set up on the server yet (no key). Ask the admin to run cpl-set-claude-key.")
+            env = {"PATH": "/usr/bin:/bin", "ANTHROPIC_API_KEY": key, "HOME": d}
+            p = subprocess.run([SCAN_PY, os.path.join(HERE, "cpl_scan.py"), d], env=env, capture_output=True, text=True, timeout=1200)
+            if p.returncode != 0:
+                msg = (p.stderr or "").strip().splitlines()
+                raise RuntimeError(msg[-1] if msg and p.returncode in (2, 3, 4, 5) else "Claude could not read this file.")
+            result = read_json_abs(os.path.join(d, "result.json"), None)
+            if not result:
+                raise RuntimeError("Claude could not read this file.")
+            if result.get("error"):
+                raise RuntimeError(result["error"])
+            job.update(status="ready", summary=result.get("summary", ""), documentType=result.get("document_type", ""),
+                       warnings=result.get("warnings", []), unmatched=result.get("unmatched", []), usage=result.get("usage"),
+                       changes=[dict(c, i=i) for i, c in enumerate(result.get("changes", []))])
+        except subprocess.TimeoutExpired:
+            job.update(status="failed", error="Reading the file took too long. Try a smaller file.")
+        except Exception as e:  # shown to the person who uploaded
+            job.update(status="failed", error=str(e)[:300] if isinstance(e, RuntimeError) else "Something went wrong reading the file.")
+            if not isinstance(e, RuntimeError):
+                sys.stderr.write(f"scan {sid}: {e!r}\n")
+        job["finished"] = int(time.time() * 1000)
+        save_job(job)
+
+
+def find_exam(st, item):
+    for e in st.get("exams", []):
+        if str(e.get("id", "")).lower() == item.strip().lower():
+            return e
+    return None
+
+
+def find_lesson(st, item):
+    item = item.strip().lower().removeprefix("lesson").strip().rstrip(".")
+    for v in st.get("lessons", []):
+        if str(v.get("id")).lower() == item:
+            return v
+    return None
+
+
+def check_change(st, c):
+    """(label, before, after, problem) for one proposed change against a record (st may be None for a new student)."""
+    kind, item, value = c.get("kind"), str(c.get("item", "")), str(c.get("value", ""))
+    st = st or catalogue()["template"]
+    if kind == "exam":
+        e = find_exam(st, item)
+        if not e:
+            return item, "", value, f"There is no exam called {item} in the tracker."
+        if value not in ("Passed", "Failed"):
+            return e["id"], e.get("status", ""), value, "Exam result must be Passed or Failed."
+        label = e["id"] + (" · " + EXAM_NAMES[e["id"]] if e["id"] in EXAM_NAMES else "")
+        return label, e.get("status", ""), value, "already recorded" if e.get("status") == value else ""
+    if kind == "lesson":
+        v = find_lesson(st, item)
+        if not v:
+            return item, "", value, f"There is no lesson {item} in the syllabus."
+        if value not in ("Completed", "In progress", "Not started"):
+            return lesson_label(v["id"]), v.get("status", ""), value, "Lesson status must be Completed, In progress or Not started."
+        if v.get("status") == "Completed" and value != "Completed":
+            return lesson_label(v["id"]), v["status"], value, "The lesson is already Completed; it is never moved back."
+        return lesson_label(v["id"]), v.get("status", ""), value, "already recorded" if v.get("status") == value else ""
+    if kind == "attendance":
+        if value not in ATT_VALUES:
+            return item, "", value, "Attendance must be Present, Late, Absent or Sick (certificate)."
+        date = c.get("date", "")
+        dup = any(a.get("date") == date and a.get("session") == item for a in st.get("attendance", []))
+        return "Attendance", item, value, "already recorded" if dup else ""
+    if kind == "detail":
+        if item not in DETAIL_FIELDS:
+            return item, "", value, "Only student ID, instructor, course and start date can be changed this way."
+        return DETAIL_FIELDS[item], str(st.get(item, "")), value, "already recorded" if str(st.get(item, "")) == value else ""
+    if kind == "note":
+        return "Progress note", "", value, "already recorded" if value and value in (st.get("review") or "") else ""
+    return item, "", value, "Unknown kind of change."
+
+
+def apply_change(st, c, source):
+    kind, item, value, date = c["kind"], str(c.get("item", "")), str(c.get("value", "")), str(c.get("date", "") or "")
+    note = (str(c.get("note") or "").strip() + " · " if c.get("note") else "") + source
+
+    def add_note(obj, key="notes"):
+        obj[key] = (obj.get(key) + "\n" if obj.get(key) else "") + note
+    if kind == "exam":
+        e = find_exam(st, item)
+        n = max(1, min(int(c.get("attempts") or 1), 9))
+        if value == "Passed" and n > 1 and not e.get("attempts"):
+            e["attempts"] = [{"result": "Failed", "date": ""} for _ in range(n - 1)]
+        e.setdefault("attempts", []).append({"result": value, "date": date})
+        e["status"] = value
+        if date:
+            e["examDate"] = date
+        add_note(e)
+    elif kind == "lesson":
+        v = find_lesson(st, item)
+        v["status"] = value
+        add_note(v)
+        if date:
+            v["notes"] += f" ({date})"
+    elif kind == "attendance":
+        st.setdefault("attendance", []).append({"date": date, "session": item, "status": value, "hours": "", "notes": note})
+    elif kind == "detail":
+        st[item] = value
+    elif kind == "note":
+        st["review"] = (st.get("review") + "\n" if st.get("review") else "") + value + f" ({source})"
+
+
+def scan_view(job):
+    """The job with each change checked against the records as they are now."""
+    out = {k: v for k, v in job.items() if k not in ("refs", "file")}
+    with lock:
+        changes = []
+        for c in job.get("changes", []):
+            uid = job["refs"].get(c.get("student", ""))
+            rec = db["students"].get(uid) if uid else None
+            st = rec["state"] if rec and not rec.get("deleted") else None
+            label, before, after, problem = check_change(st, c)
+            if c.get("saved"):
+                before, problem = c.get("before", before), ""
+            changes.append(dict(c, uid=uid if st else "", studentName=st.get("name", "") if st else "", label=label,
+                                before=before, after=after, problem=problem))
+    out["changes"] = changes
+    return out
+
+
+def apply_scan(job, u, accept, assign):
+    source = f"Read by Claude from {job['name']}, approved by {u['name']}"
+    groups = {}
+    for i in accept:
+        if not isinstance(i, int) or not 0 <= i < len(job.get("changes", [])):
+            continue
+        c = job["changes"][i]
+        target = assign.get(str(i)) or job["refs"].get(c.get("student", ""))
+        if target == "new":
+            target = "new:" + (c.get("name_in_document") or "").strip()
+            if target == "new:":
+                continue
+        if target:
+            groups.setdefault(target, []).append(c)
+    applied, skipped = 0, []
+    with changed:
+        for target, cs in groups.items():
+            if target.startswith("new:"):
+                uid = str(uuid.uuid4())
+                st = copy.deepcopy(catalogue()["template"])
+                st.update(name=target[4:], date=time.strftime("%Y-%m-%d"))
+                cur = None
+            else:
+                uid = target
+                cur = db["students"].get(uid)
+                if not cur or cur.get("deleted"):
+                    skipped.append(f"{len(cs)} change(s): student no longer exists")
+                    continue
+                st = copy.deepcopy(cur["state"])
+            n = 0
+            for c in cs:
+                _, c["before"], _, problem = check_change(st, c)
+                if problem:
+                    skipped.append(f"{st.get('name')}: {problem}")
+                    continue
+                apply_change(st, c, source)
+                c["saved"] = True
+                n += 1
+            if not n:
+                continue
+            db["rev"] += 1
+            db["students"][uid] = {"state": st, "rev": db["rev"], "updated": int(time.time() * 1000), "by": u["name"]}
+            audit(u, "scan-apply", uid, st.get("name", ""), f"from {job['name']}: " + describe(cur and cur["state"], st))
+            applied += n
+        if applied:
+            mark_dirty()
+            changed.notify_all()
+    job.update(status="applied", appliedBy=u["name"], applied=applied, skipped=skipped, finished=int(time.time() * 1000))
+    drop_upload(job)
+    save_job(job)
+    return applied, skipped
+
+
+def drop_upload(job):
+    """The uploaded file is only kept until the scan is approved or discarded."""
+    try:
+        os.remove(os.path.join(scan_dir(job["id"]), job["file"]))
+    except (FileNotFoundError, KeyError):
+        pass
+
+
+def list_scans(u):
+    root = path("scans")
+    out = []
+    cutoff = (time.time() - 30 * 86400) * 1000
+    for sid in sorted(os.listdir(root) if os.path.isdir(root) else [], reverse=True):
+        job = load_job(sid)
+        if not job:
+            continue
+        if job["created"] < cutoff:
+            subprocess.run(["rm", "-rf", scan_dir(sid)])
+            continue
+        if u["role"] == "admin" or job["by"] == u["name"]:
+            out.append({k: job.get(k) for k in ("id", "name", "status", "by", "created", "finished", "summary", "error", "applied")}
+                       | {"count": len(job.get("changes", []))})
+    out.sort(key=lambda j: j["created"], reverse=True)
+    return out[:40]
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "CPLTracker/1"
     protocol_version = "HTTP/1.1"
@@ -168,10 +483,10 @@ class Handler(BaseHTTPRequestHandler):
         failures.pop(ip, None)
         return u
 
-    def body(self):
+    def body(self, limit=MAX_BODY):
         n = int(self.headers.get("Content-Length") or 0)
-        if n > MAX_BODY:
-            raise ValueError("Record too large.")
+        if n > limit:
+            raise ValueError("Too large." if limit == MAX_BODY else "The file is too large (15 MB at most).")
         return json.loads(self.rfile.read(n) or b"{}")
 
     def do_GET(self):
@@ -194,6 +509,14 @@ class Handler(BaseHTTPRequestHandler):
                 out = [dict(s, uid=k) for k, s in db["students"].items() if s["rev"] > since]
                 rev = db["rev"]
             return self.send(200, {"rev": rev, "students": out})
+        if url.path == "/api/scans":
+            return self.send(200, {"scans": list_scans(u)})
+        m = re.fullmatch(r"/api/scan/([a-f0-9]{24})", url.path)
+        if m:
+            job = load_job(m.group(1))
+            if not job or (u["role"] != "admin" and job["by"] != u["name"]):
+                return self.send(404, {"error": "Not found"})
+            return self.send(200, scan_view(job))
         if url.path == "/api/audit":
             if u["role"] != "admin":
                 return self.send(403, {"error": "Only an admin can read the audit log."})
@@ -211,7 +534,46 @@ class Handler(BaseHTTPRequestHandler):
         u = self.user()
         if not u:
             return
-        if urlparse(self.path).path != "/api/diag":
+        p = urlparse(self.path).path
+        if p == "/api/scan":
+            try:
+                b = self.body(limit=MAX_UPLOAD * 4 // 3 + 4096)
+                mime = str(b.get("mime", "")).lower()
+                name = str(b.get("name", "upload"))
+                if mime not in SCAN_TYPES and name.lower().endswith(".xlsx"):
+                    mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                if mime not in SCAN_TYPES and name.lower().endswith((".csv", ".txt", ".tsv")):
+                    mime = "text/csv"
+                if mime not in SCAN_TYPES:
+                    raise ValueError("Claude can read photos, screenshots, PDFs, Excel (.xlsx) and CSV/text files.")
+                data = base64.b64decode(b.get("data", ""), validate=False)
+                if not data or len(data) > MAX_UPLOAD:
+                    raise ValueError("The file is empty or larger than 15 MB.")
+            except (ValueError, TypeError) as e:
+                return self.send(400, {"error": str(e)})
+            return self.send(200, {"id": start_scan(u, name, mime, data)})
+        m = re.fullmatch(r"/api/scan/([a-f0-9]{24})/(apply|discard)", p)
+        if m:
+            job = load_job(m.group(1))
+            if not job or (u["role"] != "admin" and job["by"] != u["name"]):
+                return self.send(404, {"error": "Not found"})
+            if job["status"] != "ready":
+                return self.send(409, {"error": "This scan has already been " + ("approved." if job["status"] == "applied" else job["status"] + ".")})
+            if m.group(2) == "discard":
+                job.update(status="discarded", finished=int(time.time() * 1000))
+                drop_upload(job)
+                save_job(job)
+                audit(u, "scan-discard", "", "", job["name"])
+                return self.send(200, {"ok": True})
+            try:
+                b = self.body()
+                accept = list(b.get("accept") or [])
+                assign = dict(b.get("assign") or {})
+            except (ValueError, TypeError) as e:
+                return self.send(400, {"error": str(e)})
+            applied, skipped = apply_scan(job, u, accept, assign)
+            return self.send(200, {"applied": applied, "skipped": skipped})
+        if p != "/api/diag":
             return self.send(404, {"error": "Not found"})
         try:
             b = self.body()
@@ -302,10 +664,19 @@ def main():
     r = sub.add_parser("remove-user")
     r.add_argument("name")
     sub.add_parser("list-users")
+    sub.add_parser("set-claude-key", help="paste the Anthropic API key used to read uploads")
     args = p.parse_args()
     os.makedirs(DATA, exist_ok=True)
     if args.cmd == "serve":
         return serve(args.host, args.port)
+    if args.cmd == "set-claude-key":
+        key = (sys.stdin.readline() if not sys.stdin.isatty() else __import__("getpass").getpass("Anthropic API key (hidden): ")).strip()
+        if not key.startswith("sk-ant-"):
+            sys.exit("That does not look like an Anthropic API key (it starts with sk-ant-).")
+        fd = os.open(path("claude.key"), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(key + "\n")
+        return print("Saved. Uploads will now be read by Claude.")
     us = users()
     if args.cmd == "add-user":
         code = "-".join(secrets.token_hex(2).upper() for _ in range(4))
