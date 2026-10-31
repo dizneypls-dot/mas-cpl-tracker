@@ -36,5 +36,7 @@ strip = "#resetStudent,.apptoast,#installApp'"
 if "#studentsPage,[data-page" not in s:
     assert s.count(strip) == 1
     s = s.replace(strip, "#resetStudent,.apptoast,#installApp,#studentsPage,[data-page=\"students\"],#stChip,.stupdate'", 1)
+if "#attPanel" not in s:
+    s = s.replace("#stChip,.stupdate'", "#stChip,.stupdate,#attPanel,#attCard'", 1)
 open(page, "w", encoding="utf-8").write(s)
 print("Injected students layer, build", stamp)

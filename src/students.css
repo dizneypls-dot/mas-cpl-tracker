@@ -62,3 +62,23 @@
 .stmap{grid-template-columns:1fr}
 }
 @media print{#studentsPage,.stchip,.stupdate{display:none!important}}
+.attpanel{margin-top:22px;padding-top:16px;border-top:1px solid var(--line)}
+.attsum{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0 14px}
+.attbig{font-size:28px;font-weight:700;color:var(--navy);margin-right:6px}.attbig.low{color:#9b2c2c}
+.attflag{flex-basis:100%;color:#9b2c2c;font-size:14px}
+.attadd{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;align-items:end;margin-bottom:12px}
+.attfilter{margin-bottom:8px}
+.atttable td input{width:100%;min-width:120px}
+.atttable tr.att-absent td:first-child{border-left:3px solid #c53030}
+.atttable tr.att-late td:first-child{border-left:3px solid #d69e2e}
+.atttable tr.att-excused td:first-child{border-left:3px solid #8aa0b8}
+#attCard.attlow .value{color:#9b2c2c}#attCard.attlow .bar span{background:#c53030}
+.stattend{display:block}.stattend.low{color:#9b2c2c!important;font-weight:600}
+@media(max-width:750px){
+.atttable,.atttable tbody{display:block}.atttable thead{display:none}
+.atttable tr{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:10px;background:white}
+.atttable td{border:0!important;padding:0}
+.atttable td[data-label]::before{content:attr(data-label);display:block;font-size:11px;color:var(--muted);font-weight:600}
+.atttable td:last-child{grid-column:2;justify-self:end}
+.attadd{grid-template-columns:1fr 1fr}
+}
