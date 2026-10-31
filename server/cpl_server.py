@@ -46,6 +46,9 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from cpl_records import merge_records  # noqa: E402  (stdlib only; the PDF reading itself runs in the venv)
+
 DATA = os.environ.get("CPL_DATA", "/var/lib/cpl-tracker")
 MAX_BODY = 2 * 1024 * 1024
 MAX_UPLOAD = 15 * 1024 * 1024
@@ -229,6 +232,20 @@ def run_scan(sid):
     d = scan_dir(sid)
     with scan_slots:
         try:
+            # Known attendance files (1 in 60 report, Smart event and cancellation reports) are read by fixed rules.
+            p = subprocess.run([SCAN_PY, os.path.join(HERE, "cpl_records.py"), d], env={"PATH": "/usr/bin:/bin", "HOME": d},
+                               capture_output=True, text=True, timeout=300)
+            if p.returncode == 0:
+                result = read_json_abs(os.path.join(d, "result.json"), None)
+                if result:
+                    job.update(status="ready", summary=result.get("summary", ""), documentType=result.get("document_type", ""),
+                               warnings=result.get("warnings", []), unmatched=result.get("unmatched", []), usage=result.get("usage"), rules=True,
+                               changes=[dict(c, i=i) for i, c in enumerate(result.get("changes", []))])
+                    job["finished"] = int(time.time() * 1000)
+                    save_job(job)
+                    return
+            elif p.returncode != 10:
+                sys.stderr.write(f"scan {sid}: records reader failed: {(p.stderr or '')[-500:]}\n")
             key = claude_key()
             if not key:
                 raise RuntimeError("Claude is not set up on the server yet (no key). Ask the admin to run cpl-set-claude-key.")
@@ -303,7 +320,24 @@ def check_change(st, c):
         return DETAIL_FIELDS[item], str(st.get(item, "")), value, "already recorded" if str(st.get(item, "")) == value else ""
     if kind == "note":
         return "Progress note", "", value, "already recorded" if value and value in (st.get("review") or "") else ""
+    if kind == "records":
+        if item not in RECORD_KINDS or not isinstance(c.get("data"), dict):
+            return item, "", value, "Unknown kind of record."
+        have = (st.get("records") or {}).get(item)
+        merged = merge_records(have, item, c["data"])
+        return RECORD_KINDS[item], records_summary(item, have), value, "already recorded" if have and merged == have else ""
     return item, "", value, "Unknown kind of change."
+
+
+RECORD_KINDS = {"oneIn60": "Attendance record · Aviation 1 in 60", "events": "Smart event history", "cancellations": "Cancellation history"}
+
+
+def records_summary(item, r):
+    if not r:
+        return ""
+    if item == "oneIn60":
+        return f"{len(r.get('days', []))} days, {len(r.get('sessions', []))} sessions to {r.get('to', '')}"
+    return f"{len(r.get('events', []))} events to {(r.get('range') or ['', ''])[1]}"
 
 
 def apply_change(st, c, source):
@@ -334,6 +368,9 @@ def apply_change(st, c, source):
         st[item] = value
     elif kind == "note":
         st["review"] = (st.get("review") + "\n" if st.get("review") else "") + value + f" ({source})"
+    elif kind == "records":
+        recs = st.setdefault("records", {})
+        recs[item] = merge_records(recs.get(item), item, c["data"])
 
 
 def scan_view(job):
@@ -355,7 +392,7 @@ def scan_view(job):
 
 
 def apply_scan(job, u, accept, assign):
-    source = f"Read by Claude from {job['name']}, approved by {u['name']}"
+    source = f"{'Read' if job.get('rules') else 'Read by Claude'} from {job['name']}, approved by {u['name']}"
     groups = {}
     for i in accept:
         if not isinstance(i, int) or not 0 <= i < len(job.get("changes", [])):

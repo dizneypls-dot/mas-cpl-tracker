@@ -321,6 +321,7 @@ function render() {
   else if (r.page === 'overview') overview();
   else if (r.page === 'uploads') uploads();
   else if (r.page === 'scan') scanPage(r.uid);
+  else if (r.page === 'report') reportPage(r.uid);
   else if (r.page === 'account') account();
   else students();
   if (same) window.scrollTo(0, y); else window.scrollTo(0, 0);
@@ -412,9 +413,9 @@ function studentPage(uid, tab) {
     <div class="tiles"><div class="tile"><b>${pct(f.practical)}</b><small>Practical</small></div><div class="tile"><b>${pct(f.theory)}</b><small>Theory</small></div><div class="tile ${low ? 'warn' : ''}"><b>${f.attendance < 0 ? '—' : pct(f.attendance)}</b><small>Attendance</small></div><div class="tile"><b>${f.hours.toFixed(0)}</b><small>Hours flown</small></div></div></section>
     <nav class="tabs">${tabs.map(([k, l]) => `<a href="#/student/${uid}/${k}" class="${k === tab ? 'on' : ''}">${l}</a>`).join('')}</nav>`;
   const body = tab === 'lessons' ? lessonsTab(s) : tab === 'exams' ? examsTab(s) : tab === 'attendance' ? attendanceTab(s, f) : tab === 'flights' ? flightsTab(s) : overviewTab(r, s, f);
-  app.innerHTML = frame(`<button class="icon-btn" onclick="history.length>1?history.back():location.hash='#/students'" aria-label="Back" style="margin-left:-8px">${icon('back')}</button><h1>${esc(s.name || 'Student')}</h1>`, r.dirty ? 'Saving…' : 'Updated ' + ago(r.updated) + (r.by ? ' by ' + esc(r.by) : ''), `<button class="btn ghost" id="editBtn" title="Edit details">${icon('edit')}<span class="wide">Edit</span></button><button class="btn ghost" id="reportBtn" title="Progress report, Excel and email (classic tracker)">${icon('report')}<span class="wide">Report</span></button>${Store.meta.role === 'admin' ? `<button class="icon-btn" id="delBtn" aria-label="Remove student" title="Remove student">${icon('delete')}</button>` : ''}`, hero + body);
+  app.innerHTML = frame(`<button class="icon-btn" onclick="history.length>1?history.back():location.hash='#/students'" aria-label="Back" style="margin-left:-8px">${icon('back')}</button><h1>${esc(s.name || 'Student')}</h1>`, r.dirty ? 'Saving…' : 'Updated ' + ago(r.updated) + (r.by ? ' by ' + esc(r.by) : ''), `<button class="btn ghost" id="editBtn" title="Edit details">${icon('edit')}<span class="wide">Edit</span></button><button class="btn ghost" id="reportBtn" title="Attendance and progress report (PDF)">${icon('report')}<span class="wide">Report</span></button>${Store.meta.role === 'admin' ? `<button class="icon-btn" id="delBtn" aria-label="Remove student" title="Remove student">${icon('delete')}</button>` : ''}`, hero + body);
   $('#editBtn').onclick = () => editDetails(uid);
-  $('#reportBtn').onclick = () => openClassic(uid);
+  $('#reportBtn').onclick = () => go('report/' + uid);
   if ($('#delBtn')) $('#delBtn').onclick = async () => { if (!confirm('Remove ' + (s.name || 'this student') + ' from the shared database for everyone?')) return; try { await Store.remove(uid); toast('Student removed.'); go('students'); } catch (e) { toast(e.message); } };
   const c = $('#content');
   c.onclick = e => {
@@ -545,6 +546,30 @@ function openClassic(uid) {
   window.open('classic/#student=' + uid, '_blank');
 }
 
+// ---------- attendance and progress report (report.js, shared with the Android app) ----------
+function reportPage(uid) {
+  const r = Store.get(uid);
+  if (!r) { if (!Store.ready || Store.status !== 'Live') { app.innerHTML = frame('<h1>Report</h1>', '', '', `<div class="empty">Loading…</div>`); return; } go('students'); return; }
+  if (!document.getElementById('reportCss')) { const st = document.createElement('style'); st.id = 'reportCss'; st.textContent = CPLReport.css + '\n@media print{body>*:not(#reportPrint){display:none!important}#reportPrint{display:block!important}#reportPrint .rpt{width:auto;margin:0;padding:0;box-shadow:none}}#reportPrint{display:none}'; document.head.append(st); }
+  const o = reportPage.opts = reportPage.uid === uid ? reportPage.opts : {progress: true};
+  reportPage.uid = uid;
+  const s = r.state, rep = CPLReport.render(s, CAT, {...o, today: today()});
+  document.title = rep.file;
+  const back = `<button class="icon-btn" onclick="history.length > 1 ? history.back() : location.hash = '#/student/${uid}'" aria-label="Back" style="margin-left:-8px">${icon('back')}</button>`;
+  const rec = (s.records || {}).oneIn60;
+  app.innerHTML = frame(back + `<h1>${esc(s.name || 'Student')}</h1>`, 'Attendance and progress report', `<button class="btn ghost" id="classicBtn" title="Classic progress report, Excel and email">${icon('file')}<span class="wide">Classic</span></button><button class="btn primary" id="printBtn">${icon('report')}<span>Save PDF / Print</span></button>`, `
+    <div class="card rtools"><label class="field"><span>From</span><input type="date" id="rFrom" value="${rep.from}"></label><label class="field"><span>To</span><input type="date" id="rTo" value="${rep.to}"></label>
+     <label class="check"><input type="checkbox" id="rProg" ${o.progress ? 'checked' : ''}> Include training progress</label>
+     <div class="muted" style="font-size:12.5px;flex-basis:100%">${rec ? `Attendance record loaded: ${esc(auDate(rec.from))} to ${esc(auDate(rec.to))}.` : 'No Aviation 1 in 60 attendance record is loaded for this student yet, so weeks show as “No record”. Upload it on the Uploads page.'} Flights come from Smart flight reports; upload the Smart event report and cancellation report to add those sections.</div></div>
+    <div class="rwrap"><div class="rscale">${rep.html}</div></div>`);
+  const upd = () => { o.from = $('#rFrom').value || undefined; o.to = $('#rTo').value || undefined; if (o.from && o.to && o.from > o.to) return toast('“From” must be before “To”.'); o.progress = $('#rProg').checked; reportPage(uid); };
+  $('#rFrom').onchange = upd; $('#rTo').onchange = upd; $('#rProg').onchange = upd;
+  $('#classicBtn').onclick = () => openClassic(uid);
+  $('#printBtn').onclick = () => { let p = document.getElementById('reportPrint'); if (!p) { p = document.createElement('div'); p.id = 'reportPrint'; document.body.append(p); } p.innerHTML = rep.html; document.title = rep.file; setTimeout(() => window.print(), 50); };
+  const fit = () => { const w = $('.rwrap'), sc = $('.rscale'); if (!w || !sc) return; const k = Math.min(1, w.clientWidth / sc.scrollWidth); sc.style.transform = k < 1 ? `scale(${k})` : ''; w.style.height = k < 1 ? sc.scrollHeight * k + 'px' : ''; };
+  requestAnimationFrame(fit); window.onresize = fit;
+}
+
 // ---------- overview ----------
 function overview() {
   document.title = 'Overview · CPL Tracker';
@@ -595,19 +620,32 @@ function uploads() {
    <div class="card claude" style="margin-top:16px"><div class="ch">${icon('spark')}<div><h2>Read with Claude</h2><div class="sub">Any other file: a screenshot, photo, PDF, Excel or CSV. Claude reads it, matches each person to a student and lists the changes for you to approve. Nothing is saved until you approve it.</div></div><button class="btn gold" id="scanBtn">${icon('upload')}<span>Choose a file</span></button><input type="file" id="scanFile" accept="image/*,.pdf,.csv,.txt,.tsv,.xlsx,.json" hidden></div>
     <div id="scans" class="scans"></div></div>
    <div class="card" style="margin-top:16px"><h2>What you can upload</h2><div class="kinds">
-    ${[['Smart flight activity report (.csv)', 'Every flight: lessons, hours, instructors and hour reviews. Any date range; flights already imported are skipped.'], ['Smart event cancellation report (.csv)', 'Student-caused cancellations become attendance. Sick counts only with a medical certificate.'], ['Smart exports and your own spreadsheets', 'CSV or Excel. Columns are matched automatically and you can change them before applying.'], ['Tracker backups and PDF records', 'Excel/JSON/HTML backups from the tracker, and text PDF training records (not scans).']].map(([b, s]) => `<div class="kind">${icon('file')}<div><b>${b}</b><small>${s}</small></div></div>`).join('')}</div></div>`);
+    ${[['Aviation 1 in 60 attendance report (.pdf)', 'Fingerprint days, weekly hours, course sessions and missed sessions, for the attendance report. Read on the server in seconds.'], ['Smart event report (.pdf) and cancellation report (.csv)', 'Bookings before the attendance record, and every cancellation with its reason.'], ['Smart flight activity report (.csv)', 'Every flight: lessons, hours, instructors and hour reviews. Any date range; flights already imported are skipped.'], ['Smart event cancellation report (.csv)', 'Student-caused cancellations become attendance. Sick counts only with a medical certificate.'], ['Smart exports and your own spreadsheets', 'CSV or Excel. Columns are matched automatically and you can change them before applying.'], ['Tracker backups and PDF records', 'Excel/JSON/HTML backups from the tracker, and text PDF training records (not scans).']].map(([b, s]) => `<div class="kind">${icon('file')}<div><b>${b}</b><small>${s}</small></div></div>`).join('')}</div></div>`);
   $('#reviewSlot').append(importer.reviewEl);
   const drop = $('#drop'), files = $('#files');
   drop.onclick = () => files.click();
   drop.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); files.click(); } };
-  files.onchange = () => { const f = [...files.files]; files.value = ''; importer.upload(f); };
+  files.onchange = () => { const f = [...files.files]; files.value = ''; routeUpload(f); };
   for (const ev of ['dragenter', 'dragover']) drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); });
   for (const ev of ['dragleave', 'drop']) drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); });
-  drop.addEventListener('drop', e => importer.upload([...e.dataTransfer.files]));
+  drop.addEventListener('drop', e => routeUpload([...e.dataTransfer.files]));
   const sf = $('#scanFile');
   $('#scanBtn').onclick = () => sf.click();
   sf.onchange = () => { const f = sf.files[0]; sf.value = ''; if (f) Scans.upload(f); };
   Scans.list();
+}
+
+// PDFs (Aviation 1 in 60 reports, Smart event reports) are read on the server; Smart cancellation reports go to both:
+// here they become attendance, on the server their reasons are kept for the attendance report.
+async function routeUpload(list) {
+  const local = [];
+  for (const f of list) {
+    const ext = (f.name.split('.').pop() || '').toLowerCase();
+    if (ext === 'pdf') { Scans.upload(f); continue; }
+    if (ext === 'csv') { try { const head = (await f.slice(0, 800).text()).toLowerCase(); if (head.includes('cancellation type') && head.includes('event type')) Scans.upload(f); } catch (e) { } }
+    local.push(f);
+  }
+  if (local.length) importer.upload(local);
 }
 
 // ---------- Claude scans ----------
@@ -622,7 +660,7 @@ const Scans = {
     try {
       const data = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = () => rej(r.error); r.readAsDataURL(f); });
       await Store.api('POST', '/api/scan', {name: f.name, mime, data});
-      toast('Claude is reading ' + f.name + '. This usually takes under a minute.');
+      toast('Reading ' + f.name + '…');
       this.list();
     } catch (e) { toast(e.message || 'Upload failed.'); }
   },
@@ -679,7 +717,7 @@ async function scanPage(id) {
   app.innerHTML = frame(back + '<h1>Review</h1>', esc(j.name), '', `
    <div class="card claude"><div class="ch">${icon('spark')}<div><h2>${esc(j.documentType || 'Document')}</h2><div class="sub">${esc(j.summary || '')}</div></div></div>
     ${(j.warnings || []).map(w => `<div class="note amber">${esc(w)}</div>`).join('')}${status}
-    <div class="muted" style="margin-top:10px;font-size:13px">${j.changes.length} change${j.changes.length === 1 ? '' : 's'} found · ${usable} new · read by Claude for ${esc(j.by)} ${ago(j.created)}. Unsure items are not ticked; check them against the file.</div></div>
+    <div class="muted" style="margin-top:10px;font-size:13px">${j.changes.length} change${j.changes.length === 1 ? '' : 's'} found · ${usable} new · ${j.rules ? 'read' : 'read by Claude'} for ${esc(j.by)} ${ago(j.created)}. Unsure items are not ticked; check them against the file.</div></div>
    ${[...groups].map(([k, cs]) => { const known = cs.filter(x => x.problem === 'already recorded'), rest = cs.filter(x => x.problem !== 'already recorded'); return `<div class="card grp">${head(k, cs)}${rest.map(row).join('')}${known.length ? `<details class="known"><summary>${known.length} already recorded</summary>${known.map(row).join('')}</details>` : ''}</div>`; }).join('') || '<div class="empty">Claude found nothing to change in this file.</div>'}
    ${done ? '' : `<div class="approve"><span id="cnt"></span><button class="btn" id="disc">Discard</button><button class="btn" id="all">Tick all</button><button class="btn primary" id="ok">${icon('check')}<span>Approve</span></button></div>`}`);
   const c = $('#content');

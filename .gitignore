@@ -3,3 +3,4 @@
 *.jks
 keystore-password.txt
 android/build/
+__pycache__/

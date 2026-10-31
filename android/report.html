@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Report</title>
+<style>
+body{margin:0;background:#f2f4f7;font:15px/1.4 system-ui,sans-serif;color:#1d2433}
+#tools{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end;padding:14px 16px;background:#fff;border-bottom:1px solid #e4e7ec}
+#tools label{display:flex;flex-direction:column;font-size:12.5px;color:#475467;gap:4px}
+#tools input[type=date]{font:inherit;font-size:15px;padding:8px 10px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;color:#1d2433}
+#tools .chk{flex-direction:row;align-items:center;gap:8px;font-size:15px;color:#1d2433;padding-bottom:8px}
+#tools .chk input{width:20px;height:20px}
+#hint{flex-basis:100%;font-size:12.5px;color:#667085}
+#wrap{padding:12px;overflow:hidden}#scale{transform-origin:0 0;width:max-content}
+@media print{#tools{display:none}#wrap{padding:0;overflow:visible!important;height:auto!important}#scale{transform:none!important;width:auto!important}body{background:#fff}.rpt{width:auto!important;margin:0!important;padding:0!important;box-shadow:none!important}}
+</style>
+<style id="rcss"></style>
+</head>
+<body>
+<div id="tools">
+ <label>From<input type="date" id="from"></label>
+ <label>To<input type="date" id="to"></label>
+ <label class="chk"><input type="checkbox" id="prog" checked>Include training progress</label>
+ <div id="hint"></div>
+</div>
+<div id="wrap"><div id="scale"></div></div>
+<script src="report.js"></script>
+<script>
+(async () => {
+  const cat = JSON.parse(Android.catalogue());
+  const s = JSON.parse(Android.state());
+  document.getElementById('rcss').textContent = CPLReport.css;
+  const o = {progress: true, logo: 'mas-logo.png'};
+  const $ = id => document.getElementById(id);
+  function draw() {
+    const today = new Date().toLocaleDateString('en-CA', {timeZone: 'Australia/Melbourne'});
+    const r = CPLReport.render(s, cat, {...o, today});
+    $('from').value = r.from; $('to').value = r.to;
+    $('scale').innerHTML = r.html;
+    Android.title(r.file);
+    const rec = (s.records || {}).oneIn60;
+    $('hint').textContent = rec ? 'Attendance record loaded: ' + rec.from.split('-').reverse().join('/') + ' to ' + rec.to.split('-').reverse().join('/') + '. Pinch to zoom. Save PDF prints the full report.' : 'No Aviation 1 in 60 attendance record is loaded for this student yet. Upload it from Uploads (or share the PDF to this app).';
+    fit();
+  }
+  function fit() { const w = $('wrap').clientWidth - 24, sc = $('scale'); sc.style.transform = ''; const k = Math.min(1, w / sc.scrollWidth); if (k < 1) sc.style.transform = 'scale(' + k + ')'; $('wrap').style.height = k < 1 ? (sc.scrollHeight * k + 24) + 'px' : ''; }
+  window.beforePrint = () => { $('scale').style.transform = ''; $('wrap').style.height = ''; setTimeout(fit, 3000); };
+  $('from').onchange = $('to').onchange = $('prog').onchange = () => { o.from = $('from').value || undefined; o.to = $('to').value || undefined; o.progress = $('prog').checked; draw(); };
+  window.onresize = fit;
+  draw();
+})().catch(e => { document.body.innerHTML = '<p style="padding:20px">The report could not be made: ' + String(e && e.message || e).replace(/</g, '&lt;') + '</p>'; });
+</script>
+</body>
+</html>

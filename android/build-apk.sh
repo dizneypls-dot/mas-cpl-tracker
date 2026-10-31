@@ -19,6 +19,7 @@ for e in ini["exams"]:
 json.dump({"order": order, "lessons": cat, "template": ini}, open(sys.argv[2], "w"))
 PY
 cp ../assets/mas-logo.png ../assets/anac-logo.png $OUT/assets/
+cp report.html ../src/web/report.js $OUT/assets/
 $AAPT package -f -m -J $OUT/gen -M AndroidManifest.xml -S res -I $SDK/android.jar
 javac --release 8 -nowarn -Xlint:-options -encoding UTF-8 -classpath $SDK/android.jar -d $OUT/classes $(find src $OUT/gen -name '*.java')
 java -cp $SDK/r8.jar com.android.tools.r8.D8 --release --min-api 24 --lib $SDK/android.jar \

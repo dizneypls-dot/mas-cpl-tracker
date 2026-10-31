@@ -130,13 +130,15 @@ public class StudentActivity extends Activity implements Store.Listener {
         bar.addView(Ui.iconButton(this, R.drawable.ic_back, Color.WHITE, "Back", v -> finish()));
         View sp = new View(this);
         bar.addView(sp, new LinearLayout.LayoutParams(0, 1, 1));
+        bar.addView(Ui.iconButton(this, R.drawable.ic_file, Color.WHITE, "Attendance and progress report", v -> openReport()));
         bar.addView(Ui.iconButton(this, R.drawable.ic_edit, Color.WHITE, "Edit details", v -> editDetails()));
         ImageView more = Ui.iconButton(this, R.drawable.ic_more, Color.WHITE, "More", null);
         more.setOnClickListener(v -> {
             PopupMenu pm = new PopupMenu(this, v);
-            pm.getMenu().add(0, 1, 0, "Edit details");
-            if (store.admin()) pm.getMenu().add(0, 2, 1, "Remove student");
-            pm.setOnMenuItemClickListener(m -> { if (m.getItemId() == 1) editDetails(); else removeStudent(); return true; });
+            pm.getMenu().add(0, 3, 0, "Attendance and progress report");
+            pm.getMenu().add(0, 1, 1, "Edit details");
+            if (store.admin()) pm.getMenu().add(0, 2, 2, "Remove student");
+            pm.setOnMenuItemClickListener(m -> { if (m.getItemId() == 3) openReport(); else if (m.getItemId() == 1) editDetails(); else removeStudent(); return true; });
             pm.show();
         });
         bar.addView(more);
@@ -716,6 +718,8 @@ public class StudentActivity extends Activity implements Store.Listener {
         try { if (iso != null && iso.length() >= 10) c.set(Integer.parseInt(iso.substring(0, 4)), Integer.parseInt(iso.substring(5, 7)) - 1, Integer.parseInt(iso.substring(8, 10))); } catch (Exception ignored) { }
         new DatePickerDialog(this, (v, y, m, d) -> p.picked(String.format(Locale.ROOT, "%04d-%02d-%02d", y, m + 1, d)), c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show();
     }
+
+    private void openReport() { startActivity(new android.content.Intent(this, ReportActivity.class).putExtra("uid", uid)); }
 
     private void editDetails() {
         JSONObject s = state();

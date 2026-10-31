@@ -320,3 +320,8 @@ svg.i{width:22px;height:22px;fill:currentColor;flex:0 0 auto}
 .known summary{padding:10px 20px;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;list-style:none}
 .known summary::before{content:'▸ '}.known[open] summary::before{content:'▾ '}
 .known summary::-webkit-details-marker{display:none}
+
+/* report page */
+.rtools{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:flex-end;margin-bottom:16px}.rtools .field{margin:0;min-width:150px}
+.rtools .check{display:flex;gap:8px;align-items:center;font-size:14px;padding-bottom:10px}
+.rwrap{overflow:hidden}.rscale{transform-origin:0 0;width:max-content}
