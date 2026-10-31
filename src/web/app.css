@@ -277,3 +277,5 @@ svg.i{width:22px;height:22px;fill:currentColor;flex:0 0 auto}
 }
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 @media print{.side,.top,.mnav,.tabs,.btn,.icon-btn{display:none!important}.shell{display:block}.content{padding:0}.card,.list,.hero{box-shadow:none}}
+.lastf b{display:block;font-size:13.5px;font-weight:600;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lastf small{color:var(--muted);font-size:12px}
+.nextcard svg.i:first-child{flex:0 0 auto}

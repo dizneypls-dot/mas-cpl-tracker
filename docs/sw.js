@@ -1,5 +1,5 @@
 // Offline support: always try the network first (so updates show at once), fall back to the last copy offline.
-const CACHE='cpl-web-2026-10-31T19:55:43Z';
+const CACHE='cpl-web-2026-10-31T20:16:37Z';
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(['./','app.js','app.css','importer.js','catalogue.json','logos/mas.png','logos/anac.png'])).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n!==CACHE).map(n=>caches.delete(n)))).then(()=>self.clients.claim()))});
 self.addEventListener('fetch',e=>{

@@ -220,10 +220,26 @@ public class StudentActivity extends Activity implements Store.Listener {
         prog.addView(meter("Practical · " + f.done + " of " + Course.LESSONS.size() + " lessons", f.practical, Ui.TEAL));
         prog.addView(meter("Theory · exams passed", f.theory, Ui.GOLD));
         box.addView(prog, Ui.margins(this, 0, 0, 0, 12));
+        if (!f.last.isEmpty()) {
+            LinearLayout lc = Ui.card(this);
+            lc.setBackground(Ui.ripple(Ui.round(Color.WHITE, Ui.dp(this, 16)), Ui.round(0xFF000000, Ui.dp(this, 16))));
+            LinearLayout lr = Ui.row(this);
+            lr.addView(Ui.icon(this, R.drawable.ic_flight, Ui.TEAL, 26));
+            LinearLayout lcol = Ui.col(this);
+            lcol.setPadding(Ui.dp(this, 14), 0, 0, 0);
+            lcol.addView(Ui.label(this, "Last flown · " + Ui.auDate(f.lastDate)));
+            lcol.addView(Ui.text(this, f.last, 16, Ui.TEXT, true));
+            lcol.addView(Ui.text(this, f.flights + " flights · " + Course.hours(f.hours) + " in total", 13, Ui.MUTED, false));
+            lr.addView(lcol, Ui.weight(1));
+            lr.addView(Ui.icon(this, R.drawable.ic_chevron, Ui.MUTED, 20));
+            lc.addView(lr);
+            lc.setOnClickListener(v -> { tab = "flights"; body.removeAllViews(); render(); });
+            box.addView(lc, Ui.margins(this, 0, 0, 0, 12));
+        }
         LinearLayout next = Ui.card(this);
         next.setBackground(Ui.ripple(Ui.round(Color.WHITE, Ui.dp(this, 16)), Ui.round(0xFF000000, Ui.dp(this, 16))));
         LinearLayout nr = Ui.row(this);
-        nr.addView(Ui.icon(this, R.drawable.ic_flight, Ui.TEAL, 26));
+        nr.addView(Ui.icon(this, R.drawable.ic_school, Ui.TEAL, 26));
         LinearLayout nc = Ui.col(this);
         nc.setPadding(Ui.dp(this, 14), 0, 0, 0);
         nc.addView(Ui.label(this, "Next lesson"));
@@ -231,11 +247,12 @@ public class StudentActivity extends Activity implements Store.Listener {
         Course.Lesson nl = null;
         for (Course.Lesson l : Course.LESSONS) if (f.next.startsWith(l.id + ". ")) { nl = l; break; }
         if (nl != null) nc.addView(Ui.text(this, nl.duration + " · " + nl.mode, 13, Ui.MUTED, false));
+        if (f.gaps > 0) nc.addView(Ui.text(this, f.gaps + " earlier lesson" + (f.gaps > 1 ? "s" : "") + " not marked complete", 13, Ui.AMBER, true));
         nr.addView(nc, Ui.weight(1));
         nr.addView(Ui.icon(this, R.drawable.ic_chevron, Ui.MUTED, 20));
         next.addView(nr);
         next.setOnClickListener(v -> { tab = "lessons"; lessonFilter = "todo"; body.removeAllViews(); render(); });
-        box.addView(next, Ui.margins(this, 0, 0, 0, 12));
+        if (!f.next.isEmpty()) box.addView(next, Ui.margins(this, 0, 0, 0, 12));
         if (f.flights > 0) {
             LinearLayout fl = Ui.card(this);
             fl.addView(Ui.title(this, "Flying", 17, Ui.NAVY));

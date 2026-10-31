@@ -443,7 +443,7 @@ public class MainActivity extends Activity implements Store.Listener {
             String instr = s.optString("instructor");
             sub.setText(Ui.shortCourse(s.optString("course")) + (instr.isEmpty() ? "" : " · " + instr));
             pills.removeAllViews();
-            TextView nx = Ui.ellipsize(Ui.text(a, f.next, 12, Ui.TEAL, true));
+            TextView nx = Ui.ellipsize(Ui.text(a, f.last.isEmpty() ? (f.next.isEmpty() ? "No flights yet" : "Next: " + f.next) : "Last: " + f.last + " · " + Ui.auDate(f.lastDate), 12, Ui.TEAL, true));
             pills.addView(nx, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
             if (f.attendance >= 0 && f.attendance < 80) Ui.gap(pills, Ui.pill(a, Course.pct(f.attendance) + " attend.", Ui.RED, Ui.RED_BG), 6);
             if (r.dirty) Ui.gap(pills, Ui.pill(a, "Saving", Ui.AMBER, Ui.AMBER_BG), 6);

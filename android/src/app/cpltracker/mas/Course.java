@@ -97,7 +97,8 @@ final class Course {
     static final class Figures {
         double practical, theory, overall, attendance = -1, hours, solo, ifr;
         int done, flights, present, late, absent, sick, sessions;
-        String next = "Course complete", lastFlight = "";
+        String next = "Course complete", lastFlight = "", last = "", lastDate = "";
+        int gaps;
     }
 
     static Figures figures(JSONObject s) {
@@ -132,6 +133,39 @@ final class Course {
             String d = x.optString("date");
             if (d.compareTo(f.lastFlight) > 0) f.lastFlight = d;
         }
+        // What they last flew, and the next lesson after the furthest one flown (earlier unmarked lessons are gaps).
+        int furthest = -1;
+        JSONObject lastF = null;
+        if (fl != null) for (int i = 0; i < fl.length(); i++) {
+            JSONObject x = fl.optJSONObject(i);
+            if (x == null) continue;
+            if (lastF == null || x.optString("date").compareTo(lastF.optString("date")) >= 0) lastF = x;
+            String les = x.optString("lesson");
+            if (BY_ID.containsKey(les)) furthest = Math.max(furthest, order(les));
+        }
+        if (lastF != null) {
+            String les = lastF.optString("lesson");
+            f.last = BY_ID.containsKey(les) ? label(les) : lastF.optString("raw", "Flight");
+            f.lastDate = lastF.optString("date");
+        }
+        if (furthest >= 0 && ls != null) {
+            f.next = "Course complete";
+            for (int i = 0; i < ls.length(); i++) {
+                JSONObject v = ls.optJSONObject(i);
+                if (v == null) continue;
+                String lid = id(v.opt("id"));
+                int o = order(lid);
+                boolean done = "Completed".equals(v.optString("status"));
+                if (o < furthest && !done) f.gaps++;
+                if (o > furthest && !done && "Course complete".equals(f.next)) f.next = label(lid);
+            }
+            if ("Course complete".equals(f.next)) for (int i = 0; i < ls.length(); i++) {
+                JSONObject v = ls.optJSONObject(i);
+                if (v != null && !"Completed".equals(v.optString("status"))) { f.next = label(id(v.opt("id"))); break; }
+            }
+        }
+        String course = s.optString("course");
+        if (!course.isEmpty() && !course.matches("(?i).*(CPL|Commercial Pil).*")) { f.next = ""; f.gaps = 0; }
         JSONArray at = s.optJSONArray("attendance");
         f.present = f.flights;
         if (at != null) for (int i = 0; i < at.length(); i++) {
