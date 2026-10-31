@@ -129,7 +129,7 @@ public class StudentActivity extends Activity implements Store.Listener {
         bar.setPadding(Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4), 0);
         bar.addView(Ui.iconButton(this, R.drawable.ic_back, Color.WHITE, "Back", v -> finish()));
         View sp = new View(this);
-        bar.addView(sp, Ui.weight(1));
+        bar.addView(sp, new LinearLayout.LayoutParams(0, 1, 1));
         bar.addView(Ui.iconButton(this, R.drawable.ic_edit, Color.WHITE, "Edit details", v -> editDetails()));
         ImageView more = Ui.iconButton(this, R.drawable.ic_more, Color.WHITE, "More", null);
         more.setOnClickListener(v -> {

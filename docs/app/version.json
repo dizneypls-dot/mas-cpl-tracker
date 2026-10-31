@@ -1,6 +1,6 @@
 {
- "versionCode": 8,
- "versionName": "2.0.1",
+ "versionCode": 9,
+ "versionName": "2.0.2",
  "apk": "CPLTracker.apk",
- "notes": "Fixes for the student screen, and automatic problem reports."
+ "notes": "Fixes the blank blue student screen."
 }
