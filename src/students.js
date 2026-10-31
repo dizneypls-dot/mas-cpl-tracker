@@ -280,6 +280,8 @@ window.addEventListener('online',()=>{if(sync.on()){sync.fails=0;sync.loop();syn
 if(channel)channel.onmessage=async e=>{if(!ready||!idb.db)return;const {puts=[],dels=[]}=e.data||{};try{for(const r of await idb.get(puts)){R.students[r.uid]=r;savedSig.set(r.uid,sig(r))}}catch(err){return}for(const u of dels){delete R.students[u];savedSig.delete(u)}if(rec()&&!same(rec().state,state))sync.refreshOpen(rec());if(page==='students')list()};
 window.cplStudents={open,list,sync,roster:()=>R,pdfText,readFile,upload,lessonRef,examRef,isoDate};
 
+// The old Android app (a web page inside the app) points people to the new native app.
+if(window.AndroidBridge){const t=document.createElement('div');t.className='stupdate';t.innerHTML='<span><strong>The new CPL Tracker app is here.</strong> A fully native Android app with the same students and live sync. Install it over this one — sign in with your access code.</span><a class="primary" style="padding:8px 14px;border-radius:10px;background:#b8955a;color:#fff;text-decoration:none;font-weight:600" href="https://dizneypls-dot.github.io/mas-cpl-tracker/app/CPLTracker.apk">Download</a>';document.body.append(t)}
 // ---------- app updates ----------
 const build=(document.querySelector('meta[name="cpl-build"]')||{}).content||'';
 const foot=document.querySelector('footer small');if(foot&&build)foot.textContent+=' · version '+build.slice(0,16).replace('T',' ');
