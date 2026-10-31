@@ -82,3 +82,4 @@
 .atttable td:last-child{grid-column:2;justify-self:end}
 .attadd{grid-template-columns:1fr 1fr}
 }
+.atttable tr.attflight td{color:var(--muted)}

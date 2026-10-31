@@ -26,6 +26,7 @@ import json
 import os
 import re
 import secrets
+import signal
 import sys
 import threading
 import time
@@ -40,6 +41,29 @@ lock = threading.Lock()
 changed = threading.Condition(lock)
 db = {"rev": 0, "students": {}}
 failures = {}
+
+
+dirty = threading.Event()
+
+
+def mark_dirty():
+    dirty.set()
+
+
+def flusher():
+    """Writes the database at most every 2 seconds, so a burst of saves is one disk write."""
+    while True:
+        dirty.wait()
+        time.sleep(2)
+        with lock:
+            dirty.clear()
+            snapshot = json.dumps(db, separators=(",", ":"))
+        tmp = path("db.json.tmp")
+        with open(tmp, "w") as f:
+            f.write(snapshot)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path("db.json"))
 
 
 def path(name):
@@ -204,7 +228,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(409, {"student": dict(cur, uid=uid)})
             db["rev"] += 1
             db["students"][uid] = {"state": state, "rev": db["rev"], "updated": int(time.time() * 1000), "by": u["name"]}
-            write_json("db.json", db)
+            mark_dirty()
             audit(u, "save", uid, state.get("name", ""), describe(cur and not cur.get("deleted") and cur["state"], state))
             changed.notify_all()
             rev = db["rev"]
@@ -226,7 +250,7 @@ class Handler(BaseHTTPRequestHandler):
             # Keep a tombstone so every device removes it too.
             db["students"][uid] = {"state": {"name": name, "lessons": []}, "rev": db["rev"], "deleted": True,
                                    "updated": int(time.time() * 1000), "by": u["name"]}
-            write_json("db.json", db)
+            mark_dirty()
             audit(u, "remove", uid, name)
             changed.notify_all()
         self.send(200, {"ok": True})
@@ -236,6 +260,13 @@ def serve(host, port):
     global db
     os.makedirs(DATA, exist_ok=True)
     db = read_json("db.json", db)
+    threading.Thread(target=flusher, daemon=True).start()
+
+    def stop(*_):
+        with lock:
+            write_json("db.json", db)
+        os._exit(0)
+    signal.signal(signal.SIGTERM, stop)
     httpd = ThreadingHTTPServer((host, port), Handler)
     httpd.daemon_threads = True
     print(f"CPL tracker database on http://{host}:{port}  data: {DATA}", flush=True)
