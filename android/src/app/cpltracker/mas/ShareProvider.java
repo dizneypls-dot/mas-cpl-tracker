@@ -48,6 +48,7 @@ public class ShareProvider extends ContentProvider {
     public String getType(Uri u) {
         String n = u.getLastPathSegment() == null ? "" : u.getLastPathSegment().toLowerCase();
         if (n.endsWith(".html")) return "text/html";
+        if (n.endsWith(".apk")) return "application/vnd.android.package-archive";
         if (n.endsWith(".csv")) return "text/csv";
         if (n.endsWith(".pdf")) return "application/pdf";
         if (n.endsWith(".png")) return "image/png";
