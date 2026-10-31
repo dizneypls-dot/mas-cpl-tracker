@@ -1,6 +1,6 @@
 {
- "versionCode": 7,
- "versionName": "2.0.0",
+ "versionCode": 8,
+ "versionName": "2.0.1",
  "apk": "CPLTracker.apk",
- "notes": "The new native CPL Tracker app."
+ "notes": "Fixes for the student screen, and automatic problem reports."
 }

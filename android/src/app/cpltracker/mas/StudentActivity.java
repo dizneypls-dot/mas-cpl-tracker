@@ -43,6 +43,7 @@ public class StudentActivity extends Activity implements Store.Listener {
     protected void onCreate(Bundle b) {
         setTheme(R.style.AppTheme);
         super.onCreate(b);
+        Diag.install(this);
         store = Store.get(this);
         uid = getIntent().getStringExtra("uid");
         if (b != null) tab = b.getString("tab", tab);
@@ -64,6 +65,13 @@ public class StudentActivity extends Activity implements Store.Listener {
         root.addView(body, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
         setContentView(root);
         render();
+        // Once per version: send the screen's layout sizes, so drawing problems on any phone can be seen and fixed.
+        android.content.SharedPreferences p = getSharedPreferences("diag", 0);
+        String key = "layout-" + Updater.versionName(this);
+        if (!p.getBoolean(key, false)) root.postDelayed(() -> {
+            p.edit().putBoolean(key, true).apply();
+            Diag.report(this, "Student screen layout (screen " + root.getWidth() + "x" + root.getHeight() + ", tab " + tab + ")\n" + Diag.tree(root, 7));
+        }, 2500);
     }
 
     @Override protected void onSaveInstanceState(Bundle o) { super.onSaveInstanceState(o); o.putString("tab", tab); }
@@ -76,6 +84,21 @@ public class StudentActivity extends Activity implements Store.Listener {
     private JSONObject state() { Store.Rec r = store.find(uid); return r == null ? null : r.state; }
 
     private void render() {
+        try { renderInner(); }
+        catch (Throwable t) {
+            body.removeAllViews();
+            LinearLayout box = Ui.col(this);
+            box.setPadding(Ui.dp(this, 24), Ui.dp(this, 40), Ui.dp(this, 24), Ui.dp(this, 24));
+            box.addView(Ui.title(this, "This student could not be shown", 20, Ui.NAVY));
+            TextView m = Ui.text(this, "The problem has been sent so it can be fixed.\n\n" + t, 14, Ui.MUTED, false);
+            m.setPadding(0, Ui.dp(this, 10), 0, 0);
+            box.addView(m);
+            body.addView(box);
+            Diag.report(this, "Student screen failed (uid " + uid + ", tab " + tab + ")\n" + Diag.stack(t));
+        }
+    }
+
+    private void renderInner() {
         JSONObject s = state();
         if (s == null) { finish(); return; }
         Course.Figures f = Course.figures(s);

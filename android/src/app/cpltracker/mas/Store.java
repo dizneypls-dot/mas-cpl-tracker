@@ -343,6 +343,8 @@ final class Store {
         }
     }
 
+    void post(String path, String body) throws Exception { http("POST", server(), path, code(), body); }
+
     synchronized int pending() { int n = 0; for (Rec r : recs.values()) if (r.dirty) n++; return n; }
 
     private void setStatus(String s) {

@@ -57,8 +57,9 @@ public class MainActivity extends Activity implements Store.Listener {
     protected void onCreate(Bundle b) {
         setTheme(R.style.AppTheme);
         super.onCreate(b);
+        Diag.install(this);
         store = Store.get(this);
-        if (store.signedIn()) { showMain(); store.start(); Updater.check(this, false); }
+        if (store.signedIn()) { showMain(); store.start(); Updater.check(this, false); Diag.sendPending(this); }
         else showLogin();
     }
 

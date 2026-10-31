@@ -142,7 +142,7 @@ class Handler(BaseHTTPRequestHandler):
         # Access is by bearer code, never cookies, so any origin (the web app, the Android app) may call.
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
-        self.send_header("Access-Control-Allow-Methods", "GET, PUT, DELETE, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, PUT, POST, DELETE, OPTIONS")
         self.send_header("Access-Control-Max-Age", "86400")
 
     def do_OPTIONS(self):
@@ -205,6 +205,23 @@ class Handler(BaseHTTPRequestHandler):
                 lines = []
             return self.send(200, {"entries": [json.loads(x) for x in reversed(lines)]})
         self.send(404, {"error": "Not found"})
+
+    def do_POST(self):
+        """Problem reports from the apps (crash details), so they can be fixed without screenshots."""
+        u = self.user()
+        if not u:
+            return
+        if urlparse(self.path).path != "/api/diag":
+            return self.send(404, {"error": "Not found"})
+        try:
+            b = self.body()
+        except ValueError as e:
+            return self.send(400, {"error": str(e)})
+        line = json.dumps({"t": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "user": u["name"], "report": str(b.get("report", ""))[:20000],
+                           "app": str(b.get("app", ""))[:100], "device": str(b.get("device", ""))[:200]})
+        with open(path("diag.log"), "a") as f:
+            f.write(line + "\n")
+        self.send(200, {"ok": True})
 
     def do_PUT(self):
         u = self.user()
