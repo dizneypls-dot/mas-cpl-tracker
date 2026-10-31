@@ -670,9 +670,27 @@ def main():
     if args.cmd == "serve":
         return serve(args.host, args.port)
     if args.cmd == "set-claude-key":
-        key = (sys.stdin.readline() if not sys.stdin.isatty() else __import__("getpass").getpass("Anthropic API key (hidden): ")).strip()
-        if not key.startswith("sk-ant-"):
+        raw = sys.stdin.readline() if not sys.stdin.isatty() else __import__("getpass").getpass("Anthropic API key (hidden, paste once): ")
+        keys = re.findall(r"sk-ant-[A-Za-z0-9_\-]+?(?=sk-ant-|[^A-Za-z0-9_\-]|$)", raw)
+        if not keys:
             sys.exit("That does not look like an Anthropic API key (it starts with sk-ant-).")
+        if len(set(keys)) > 1:
+            sys.exit("Two different keys were pasted. Run it again and paste just one.")
+        key = keys[0]
+        if len(keys) > 1:
+            print("The key was pasted more than once; using it once.")
+        import urllib.request, urllib.error
+        req = urllib.request.Request("https://api.anthropic.com/v1/models?limit=1",
+                                     headers={"x-api-key": key, "anthropic-version": "2023-06-01"})
+        try:
+            urllib.request.urlopen(req, timeout=20).read()
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                sys.exit("Anthropic says this key is not valid (wrong, revoked or disabled). Nothing was saved. "
+                         "Copy a fresh key from console.anthropic.com > API keys and try again.")
+            print(f"Could not fully check the key (Anthropic answered {e.code}); saving it anyway.")
+        except OSError:
+            print("Could not reach Anthropic to check the key; saving it anyway.")
         fd = os.open(path("claude.key"), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w") as f:
             f.write(key + "\n")
