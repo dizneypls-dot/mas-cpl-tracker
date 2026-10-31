@@ -1,0 +1,5 @@
+# Signing key + password: never commit
+*.keystore
+*.jks
+keystore-password.txt
+android/build/
