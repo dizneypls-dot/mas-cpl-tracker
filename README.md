@@ -15,3 +15,22 @@ Student data never leaves the device: it is kept in the browser/app storage, wit
 1. Edit `src/index.html`.
 2. `./build.sh` and, for Android, raise `versionCode`/`versionName` in `android/AndroidManifest.xml` then run `android/build-apk.sh`.
 3. Commit and push; GitHub Pages serves `docs/`.
+
+## Students, uploads and live sync
+
+- **Students** page: every student on the device, search/sort, open one to fill the tracker.
+- **Upload records**: Smart exports and own spreadsheets (CSV/.xlsx, columns matched automatically and adjustable),
+  tracker backups (.xlsx/.json/.html, or "Export all"), and PDF training records (text PDFs; scanned ones need typing).
+  Every upload is shown for review before anything changes; completed lessons are never downgraded.
+- **Shared database** (optional): `server/cpl_server.py`, Python standard library only. Run it behind an HTTPS proxy
+  (e.g. Caddy) and give each instructor an access code (`add-user "Name" --role instructor`). Changes appear on every
+  connected device within about a second; edits made at the same time on different lessons are merged; admins can read
+  `/api/audit` and remove students.
+- Source for this layer: `src/students.js` + `src/students.css`; run `python3 tools/inject.py` to put them into
+  `src/index.html` (also stamps the build time), then `sh build.sh` and `sh android/build-apk.sh`.
+
+## Live app updates
+
+The Android app (1.2.0+) checks the website for a newer build on start (at most every 30 minutes), downloads it in
+the background and offers **Restart now**; it falls back to the version inside the APK when offline. The installed web app
+checks every 15 minutes. Publishing = push to `main` (GitHub Pages).

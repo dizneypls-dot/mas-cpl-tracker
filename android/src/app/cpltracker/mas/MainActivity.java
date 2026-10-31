@@ -20,18 +20,34 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-// Full-screen WebView hosting the CPL tracker page from assets. Student records live in the
-// WebView's localStorage on this device; exports go to Downloads/CPL Tracker.
+// Full-screen WebView hosting the CPL tracker page. Student records live in the WebView's
+// localStorage (and the shared database when connected); exports go to Downloads/CPL Tracker.
+// Live updates: the newest published page is downloaded from the website in the background and
+// used from the next start (or at once via "Restart now"). It is always shown with the same
+// file:///android_asset base address, so saved student data stays where it is.
 public class MainActivity extends Activity {
     private static final int PICK_FILE = 7;
+    private static final String SITE = "https://dizneypls-dot.github.io/mas-cpl-tracker/index.html";
+    private static final String BASE = "file:///android_asset/index.html";
+    private static final Pattern BUILD = Pattern.compile("<meta name=\"cpl-build\" content=\"([0-9TZ:-]{20})\">");
     private WebView web;
     private ValueCallback<Uri[]> pendingPick;
+    private String loadedBuild = "";
+    private long lastCheck = 0;
+    private volatile boolean checking = false;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -66,19 +82,101 @@ public class MainActivity extends Activity {
                 Intent i = new Intent(Intent.ACTION_GET_CONTENT);
                 i.addCategory(Intent.CATEGORY_OPENABLE);
                 i.setType("*/*");
+                if (p.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE) i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
                 try { startActivityForResult(i, PICK_FILE); } catch (Exception e) { pendingPick = null; return false; }
                 return true;
             }
         });
         setContentView(web);
-        if (state == null || web.restoreState(state) == null)
-            web.loadUrl("file:///android_asset/index.html");
+        loadPage();
+    }
+
+    private File liveFile() { return new File(getFilesDir(), "live/index.html"); }
+
+    private static String buildOf(String html) {
+        Matcher m = BUILD.matcher(html.length() > 4096 ? html.substring(0, 4096) : html);
+        return m.find() ? m.group(1) : "";
+    }
+
+    private static String readAll(InputStream in, int max) throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buf = new byte[65536];
+        for (int n; (n = in.read(buf)) > 0; ) {
+            out.write(buf, 0, n);
+            if (out.size() > max) throw new Exception("too large");
+        }
+        return new String(out.toByteArray(), StandardCharsets.UTF_8);
+    }
+
+    // Newest of: the page inside the app, or the downloaded update.
+    private void loadPage() {
+        String bundled = "";
+        try (InputStream in = getAssets().open("index.html")) { bundled = buildOf(readAll(in, 16 << 20)); } catch (Exception e) { }
+        File live = liveFile();
+        if (live.exists()) {
+            try (InputStream in = new java.io.FileInputStream(live)) {
+                String html = readAll(in, 16 << 20);
+                String b = buildOf(html);
+                if (!b.isEmpty() && b.compareTo(bundled) > 0) {
+                    loadedBuild = b;
+                    web.loadDataWithBaseURL(BASE, html, "text/html", "utf-8", BASE);
+                    return;
+                }
+                live.delete();
+            } catch (Exception e) { live.delete(); }
+        }
+        loadedBuild = bundled;
+        web.loadUrl(BASE);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (System.currentTimeMillis() - lastCheck > 30 * 60 * 1000L) checkForUpdate();
+    }
+
+    // Downloads the published page if it is newer, checks it looks complete, and keeps it for next time.
+    private void checkForUpdate() {
+        if (checking) return;
+        checking = true;
+        lastCheck = System.currentTimeMillis();
+        new Thread(() -> {
+            try {
+                HttpURLConnection c = (HttpURLConnection) new URL(SITE + "?t=" + System.currentTimeMillis()).openConnection();
+                c.setConnectTimeout(10000);
+                c.setReadTimeout(20000);
+                c.setUseCaches(false);
+                if (c.getResponseCode() != 200) return;
+                String html;
+                try (InputStream in = c.getInputStream()) { html = readAll(in, 16 << 20); }
+                String b = buildOf(html);
+                if (b.isEmpty() || b.compareTo(loadedBuild) <= 0) return;
+                if (!html.contains("id=\"initial\"") || !html.contains("/*students:end*/") || !html.trim().endsWith("</html>")) return;
+                File live = liveFile();
+                live.getParentFile().mkdirs();
+                File tmp = new File(live.getPath() + ".tmp");
+                try (FileOutputStream o = new FileOutputStream(tmp)) { o.write(html.getBytes(StandardCharsets.UTF_8)); }
+                if (!tmp.renameTo(live)) return;
+                String quoted = JSONObject.quote(b);
+                runOnUiThread(() -> web.evaluateJavascript("window.appUpdateReady&&window.appUpdateReady(" + quoted + ")", null));
+            } catch (Exception e) {
+                // Offline or the site is unavailable: keep the current version.
+            } finally {
+                checking = false;
+            }
+        }).start();
     }
 
     @Override
     protected void onActivityResult(int req, int result, Intent data) {
         if (req == PICK_FILE && pendingPick != null) {
-            pendingPick.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result, data));
+            Uri[] picked = null;
+            if (result == RESULT_OK && data != null && data.getClipData() != null) {
+                ClipData cd = data.getClipData();
+                picked = new Uri[cd.getItemCount()];
+                for (int k = 0; k < picked.length; k++) picked[k] = cd.getItemAt(k).getUri();
+            } else picked = WebChromeClient.FileChooserParams.parseResult(result, data);
+            pendingPick.onReceiveValue(picked);
             pendingPick = null;
         }
     }
@@ -90,18 +188,16 @@ public class MainActivity extends Activity {
         });
     }
 
-    @Override
-    protected void onSaveInstanceState(Bundle out) {
-        super.onSaveInstanceState(out);
-        web.saveState(out);
-    }
-
     private static String safeName(String name) {
         String n = name == null ? "" : name.replaceAll("[^A-Za-z0-9._-]", "_").replaceAll("^\\.+", "");
         return n.isEmpty() ? "file" : n;
     }
 
     class Bridge {
+        // "Restart now" after an update was downloaded.
+        @JavascriptInterface
+        public void restartApp() { runOnUiThread(MainActivity.this::loadPage); }
+
         // Saves an export (tracker HTML, Excel backup, report, .eml) into Downloads/CPL Tracker
         @JavascriptInterface
         public String saveFile(String name, String mime, String b64) {

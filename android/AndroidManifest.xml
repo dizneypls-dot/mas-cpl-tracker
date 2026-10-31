@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="app.cpltracker.mas" android:versionCode="2" android:versionName="1.1.0">
+    package="app.cpltracker.mas" android:versionCode="3" android:versionName="1.2.0">
     <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="34" />
-    <!-- Works fully offline; no internet permission. Student data stays on this device. -->
+    <!-- Internet: live app updates from the website and the shared student database. Works offline too. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <application android:label="CPL Tracker" android:icon="@mipmap/ic_launcher"
         android:allowBackup="true" android:theme="@style/AppTheme">
         <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop"
