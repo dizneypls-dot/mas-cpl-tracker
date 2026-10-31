@@ -1,14 +1,9 @@
-// Offline support. The page is fetched fresh when online (so updates show at once) and served from cache offline.
-const CACHE='cpl-tracker-757d0793a08a';
-const FILES=['./','index.html','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/icon-maskable-512.png','icons/apple-touch-icon.png'];
-self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting()))});
+// Offline support: always try the network first (so updates show at once), fall back to the last copy offline.
+const CACHE='cpl-web-2026-10-31T19:55:43Z';
+self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(['./','app.js','app.css','importer.js','catalogue.json','logos/mas.png','logos/anac.png'])).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n!==CACHE).map(n=>caches.delete(n)))).then(()=>self.clients.claim()))});
 self.addEventListener('fetch',e=>{
-  const r=e.request;
-  if(r.method!=='GET'||new URL(r.url).origin!==location.origin)return;
-  if(r.mode==='navigate'){
-    e.respondWith(fetch(r).then(res=>{const copy=res.clone();caches.open(CACHE).then(c=>c.put('index.html',copy));return res}).catch(()=>caches.match('index.html')));
-    return;
-  }
-  e.respondWith(caches.match(r).then(hit=>hit||fetch(r)));
+  const r=e.request,u=new URL(r.url);
+  if(r.method!=='GET'||u.origin!==location.origin||u.pathname.includes('/app/'))return;
+  e.respondWith(fetch(r).then(res=>{if(res.ok){const copy=res.clone();caches.open(CACHE).then(c=>c.put(r,copy))}return res}).catch(()=>caches.match(r,{ignoreSearch:true}).then(h=>h||(r.mode==='navigate'?caches.match('./'):undefined))));
 });
