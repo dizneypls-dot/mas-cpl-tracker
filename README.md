@@ -34,3 +34,10 @@ Student data never leaves the device: it is kept in the browser/app storage, wit
 The Android app (1.2.0+) checks the website for a newer build on start (at most every 30 minutes), downloads it in
 the background and offers **Restart now**; it falls back to the version inside the APK when offline. The installed web app
 checks every 15 minutes. Publishing = push to `main` (GitHub Pages).
+
+## Server (deployed 2026-10-31)
+
+`https://179-237-123-196.sslip.io` on the spare Infomaniak VPS (`ssh aurisse-mail`): `/opt/cpl-tracker/cpl_server.py`
+as systemd `cpl-tracker` (user `cpltracker`, data `/var/lib/cpl-tracker`, daily backups in `backups/`, 30 days),
+Caddy for HTTPS. Access codes: `cpl-users add "Name"` / `cpl-users add "Name" --role admin` / `cpl-users list` /
+`cpl-users remove "Name"`.
