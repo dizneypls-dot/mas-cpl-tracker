@@ -1,6 +1,6 @@
 {
- "versionCode": 11,
- "versionName": "2.1.0",
+ "versionCode": 12,
+ "versionName": "2.2.0",
  "apk": "CPLTracker.apk",
- "notes": "Read with Claude: upload or share any screenshot, photo, PDF or spreadsheet; Claude proposes record changes for you to review and approve."
+ "notes": "Attendance and progress report: open a student and tap the report button, then Save PDF."
 }
