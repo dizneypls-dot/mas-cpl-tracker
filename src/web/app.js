@@ -11,37 +11,43 @@ const today = () => new Date().toLocaleDateString('en-CA', {timeZone: 'Australia
 const auDate = iso => iso && iso.length >= 10 ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : (iso || '');
 const pct = v => (v >= 10 || v === 0 ? v.toFixed(0) : v.toFixed(1)) + '%';
 const hrs = v => (v || 0).toFixed(1) + ' h';
+// A figure with its unit set smaller: "242.3 h", "52%", "3 of 21".
+const fig = v => esc(String(v)).replace(/^([$\d.,+−-]+)\s?(%|h)$/, '$1<span class="u">$2</span>').replace(/^(\d+) of (\d+)$/, '$1<span class="u"> of $2</span>');
 const money = v => '$' + Math.round(v).toLocaleString('en-AU');
 const newId = () => crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
 const SERVER = 'https://coursetracker.online';
 const OLD_SERVER = 'https://179-237-123-196.sslip.io'; // still answers; saved sign-ins move to the new address
 const SICK = 'Sick (certificate)';
 
+// Icons: Lucide (lucide.dev, ISC licence), outline style.
 const ICON = {
-  people: 'M16,11c1.66,0 2.99,-1.34 2.99,-3S17.66,5 16,5c-1.66,0 -3,1.34 -3,3s1.34,3 3,3zM8,11c1.66,0 2.99,-1.34 2.99,-3S9.66,5 8,5C6.34,5 5,6.34 5,8s1.34,3 3,3zM8,13c-2.33,0 -7,1.17 -7,3.5V19h14v-2.5c0,-2.33 -4.67,-3.5 -7,-3.5zM16,13c-0.29,0 -0.62,0.02 -0.97,0.05 1.16,0.84 1.97,1.97 1.97,3.45V19h6v-2.5c0,-2.33 -4.67,-3.5 -7,-3.5z',
-  dashboard: 'M3,13h8V3H3v10zM3,21h8v-6H3v6zM13,21h8V11h-8v10zM13,3v6h8V3h-8z',
-  upload: 'M9,16h6v-6h4l-7,-7 -7,7h4zM5,18h14v2H5z',
-  person: 'M12,12c2.21,0 4,-1.79 4,-4s-1.79,-4 -4,-4 -4,1.79 -4,4 1.79,4 4,4zM12,14c-2.67,0 -8,1.34 -8,4v2h16v-2c0,-2.66 -5.33,-4 -8,-4z',
-  search: 'M15.5,14h-0.79l-0.28,-0.27C15.41,12.59 16,11.11 16,9.5 16,5.91 13.09,3 9.5,3S3,5.91 3,9.5 5.91,16 9.5,16c1.61,0 3.09,-0.59 4.23,-1.57l0.27,0.28v0.79l5,4.99L20.49,19l-4.99,-5zM9.5,14C7.01,14 5,11.99 5,9.5S7.01,5 9.5,5 14,7.01 14,9.5 11.99,14 9.5,14z',
-  add: 'M19,13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z',
-  back: 'M20,11H7.83l5.59,-5.59L12,4l-8,8 8,8 1.41,-1.41L7.83,13H20v-2z',
-  check: 'M9,16.17L4.83,12l-1.42,1.41L9,19 21,7l-1.41,-1.41z',
-  close: 'M19,6.41L17.59,5 12,10.59 6.41,5 5,6.41 10.59,12 5,17.59 6.41,19 12,13.41 17.59,19 19,17.59 13.41,12z',
-  flight: 'M21,16v-2l-8,-5V3.5c0,-0.83 -0.67,-1.5 -1.5,-1.5S10,2.67 10,3.5V9l-8,5v2l8,-2.5V19l-2,1.5V22l3.5,-1 3.5,1v-1.5L13,19v-5.5l8,2.5z',
-  edit: 'M3,17.25V21h3.75L17.81,9.94l-3.75,-3.75L3,17.25zM20.71,7.04c0.39,-0.39 0.39,-1.02 0,-1.41l-2.34,-2.34c-0.39,-0.39 -1.02,-0.39 -1.41,0l-1.83,1.83 3.75,3.75 1.83,-1.83z',
-  logout: 'M17,7l-1.41,1.41L18.17,11H8v2h10.17l-2.58,2.58L17,17l5,-5zM4,5h8V3H4c-1.1,0 -2,0.9 -2,2v14c0,1.1 0.9,2 2,2h8v-2H4V5z',
-  delete: 'M6,19c0,1.1 0.9,2 2,2h8c1.1,0 2,-0.9 2,-2V7H6v12zM19,4h-3.5l-1,-1h-5l-1,1H5v2h14V4z',
-  open: 'M19,19H5V5h7V3H5c-1.11,0 -2,0.9 -2,2v14c0,1.1 0.89,2 2,2h14c1.1,0 2,-0.9 2,-2v-7h-2v7zM14,3v2h3.59l-9.83,9.83 1.41,1.41L19,6.41V10h2V3h-7z',
-  file: 'M14,2H6c-1.1,0 -1.99,0.9 -1.99,2L4,20c0,1.1 0.89,2 1.99,2H18c1.1,0 2,-0.9 2,-2V8l-6,-6zM16,18H8v-2h8v2zM16,14H8v-2h8v2zM13,9V3.5L18.5,9H13z',
-  chevron: 'M10,6L8.59,7.41 13.17,12l-4.58,4.59L10,18l6,-6z',
-  sort: 'M3,18h6v-2H3v2zM3,6v2h18V6H3zM3,13h12v-2H3v2z',
-  school: 'M5,13.18v4L12,21l7,-3.82v-4L12,17l-7,-3.82zM12,3L1,9l11,6 9,-4.91V17h2V9L12,3z',
-  report: 'M19,3H5c-1.1,0 -2,0.9 -2,2v14c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2V5c0,-1.1 -0.9,-2 -2,-2zM9,17H7v-7h2v7zM13,17h-2V7h2v10zM17,17h-2v-4h2v4z',
-  android: 'M17.6,9.48l1.84,-3.18c0.16,-0.31 0.04,-0.69 -0.26,-0.85 -0.29,-0.15 -0.65,-0.06 -0.83,0.22l-1.88,3.24c-2.86,-1.21 -6.08,-1.21 -8.94,0L5.65,5.67c-0.19,-0.29 -0.58,-0.38 -0.87,-0.2 -0.28,0.18 -0.37,0.54 -0.22,0.83L6.4,9.48C3.3,11.25 1.28,14.44 1,18h22C22.72,14.44 20.7,11.25 17.6,9.48zM7,15.25c-0.69,0 -1.25,-0.56 -1.25,-1.25S6.31,12.75 7,12.75 8.25,13.31 8.25,14 7.69,15.25 7,15.25zM17,15.25c-0.69,0 -1.25,-0.56 -1.25,-1.25s0.56,-1.25 1.25,-1.25 1.25,0.56 1.25,1.25S17.69,15.25 17,15.25z',
-  spark: 'M19,9l1.25,-2.75L23,5l-2.75,-1.25L19,1l-1.25,2.75L15,5l2.75,1.25L19,9zM11.5,9.5L9,4 6.5,9.5 1,12l5.5,2.5L9,20l2.5,-5.5L17,12l-5.5,-2.5zM19,15l-1.25,2.75L15,19l2.75,1.25L19,23l1.25,-2.75L23,19l-2.75,-1.25L19,15z',
-  sync: 'M12,4V1L8,5l4,4V6c3.31,0 6,2.69 6,6 0,1.01 -0.25,1.97 -0.7,2.8l1.46,1.46C19.54,15.03 20,13.57 20,12c0,-4.42 -3.58,-8 -8,-8zM12,18c-3.31,0 -6,-2.69 -6,-6 0,-1.01 0.25,-1.97 0.7,-2.8L5.24,7.74C4.46,8.97 4,10.43 4,12c0,4.42 3.58,8 8,8v3l4,-4 -4,-4v3z',
+  people: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/> <circle cx="9" cy="7" r="4"/> <path d="M22 21v-2a4 4 0 0 0-3-3.87"/> <path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  dashboard: '<rect width="7" height="9" x="3" y="3" rx="1"/> <rect width="7" height="5" x="14" y="3" rx="1"/> <rect width="7" height="9" x="14" y="12" rx="1"/> <rect width="7" height="5" x="3" y="16" rx="1"/>',
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/> <polyline points="17 8 12 3 7 8"/> <line x1="12" x2="12" y1="3" y2="15"/>',
+  person: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/> <circle cx="12" cy="7" r="4"/>',
+  search: '<circle cx="11" cy="11" r="8"/> <path d="m21 21-4.3-4.3"/>',
+  add: '<path d="M5 12h14"/> <path d="M12 5v14"/>',
+  back: '<path d="m12 19-7-7 7-7"/> <path d="M19 12H5"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  close: '<path d="M18 6 6 18"/> <path d="m6 6 12 12"/>',
+  flight: '<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
+  edit: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/> <path d="m15 5 4 4"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/> <polyline points="16 17 21 12 16 7"/> <line x1="21" x2="9" y1="12" y2="12"/>',
+  delete: '<path d="M3 6h18"/> <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/> <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/> <line x1="10" x2="10" y1="11" y2="17"/> <line x1="14" x2="14" y1="11" y2="17"/>',
+  open: '<path d="M15 3h6v6"/> <path d="M10 14 21 3"/> <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/> <path d="M14 2v4a2 2 0 0 0 2 2h4"/> <path d="M10 9H8"/> <path d="M16 13H8"/> <path d="M16 17H8"/>',
+  chevron: '<path d="m9 18 6-6-6-6"/>',
+  sort: '<path d="m21 16-4 4-4-4"/> <path d="M17 20V4"/> <path d="m3 8 4-4 4 4"/> <path d="M7 4v16"/>',
+  school: '<path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/> <path d="M22 10v6"/> <path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>',
+  report: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/> <path d="M14 2v4a2 2 0 0 0 2 2h4"/> <path d="M8 18v-1"/> <path d="M12 18v-6"/> <path d="M16 18v-3"/>',
+  android: '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/> <path d="M12 18h.01"/>',
+  spark: '<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/> <path d="M20 3v4"/> <path d="M22 5h-4"/> <path d="M4 17v2"/> <path d="M5 18H3"/>',
+  sync: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/> <path d="M21 3v5h-5"/> <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/> <path d="M8 16H3v5"/>',
+  warning: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/> <path d="M12 9v4"/> <path d="M12 17h.01"/>',
+  calendar: '<path d="M8 2v4"/> <path d="M16 2v4"/> <rect width="18" height="18" x="3" y="4" rx="2"/> <path d="M3 10h18"/> <path d="M8 14h.01"/> <path d="M12 14h.01"/> <path d="M16 14h.01"/> <path d="M8 18h.01"/> <path d="M12 18h.01"/> <path d="M16 18h.01"/>',
+  clock: '<circle cx="12" cy="12" r="10"/> <polyline points="12 6 12 12 16 14"/>',
 };
-const icon = (n, cls = 'i') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICON[n]}"/></svg>`;
+const icon = (n, cls = 'i') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
 const AV = ['#16627a', '#0b2a4f', '#7a5a20', '#5b3e8e', '#2e6b3f', '#8e3e4e', '#3e5b8e', '#6b5b2e'];
 function hash(s) { let h = 0; for (const c of String(s || '')) h = (h * 31 + c.charCodeAt(0)) | 0; return Math.abs(h); }
 function initials(n) { const p = String(n || '').replace(/\(.*?\)/g, '').trim().split(/\s+/).filter(Boolean); return p.length ? (p[0][0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase() : '?'; }
@@ -431,7 +437,7 @@ function studentPage(uid, tab) {
   const low = f.attendance >= 0 && f.attendance < 80;
   const hero = `<section class="hero"><div class="head">${avatar(s.name, 64)}<div style="min-width:0"><h2>${esc(s.name || 'Unnamed student')}</h2><div class="meta">${esc(shortCourse(s.course))}</div><div class="meta">${esc([s.studentId && 'ID ' + s.studentId, s.instructor && 'Instructor ' + s.instructor].filter(Boolean).join(' · '))}</div></div>
     <div style="margin-left:auto">${ring(f.overall, 76, '#d9bf8c', '#ffffff30')}</div></div>
-    <div class="tiles"><div class="tile"><b>${pct(f.practical)}</b><small>Practical</small></div><div class="tile"><b>${pct(f.theory)}</b><small>Theory</small></div><div class="tile ${low ? 'warn' : ''}"><b>${f.attendance < 0 ? '—' : pct(f.attendance)}</b><small>Attendance</small></div><div class="tile"><b>${f.hours.toFixed(0)}</b><small>Hours</small></div></div></section>
+    <div class="tiles"><div class="tile"><b>${fig(pct(f.practical))}</b><small>Practical</small></div><div class="tile"><b>${fig(pct(f.theory))}</b><small>Theory</small></div><div class="tile ${low ? 'warn' : ''}"><b>${f.attendance < 0 ? '—' : fig(pct(f.attendance))}</b><small>Attendance</small></div><div class="tile"><b>${fig(f.hours.toFixed(0) + ' h')}</b><small>Flown</small></div></div></section>
     <nav class="tabs">${tabs.map(([k, l]) => `<a href="#/student/${uid}/${k}" class="${k === tab ? 'on' : ''}">${l}</a>`).join('')}</nav>`;
   const body = tab === 'lessons' ? lessonsTab(s) : tab === 'exams' ? examsTab(s) : tab === 'attendance' ? attendanceTab(s, f) : tab === 'flights' ? flightsTab(s) : overviewTab(r, s, f);
   app.innerHTML = frame(`<button class="icon-btn" onclick="history.length>1?history.back():location.hash='#/students'" aria-label="Back" style="margin-left:-8px">${icon('back')}</button><h1>${esc(s.name || 'Student')}</h1>`, r.dirty ? 'Saving…' : 'Updated ' + ago(r.updated) + (r.by ? ' by ' + esc(r.by) : ''), `<button class="btn ghost" id="editBtn" title="Edit details">${icon('edit')}<span class="wide">Edit</span></button><button class="btn ghost" id="reportBtn" title="Attendance and progress report (PDF)">${icon('report')}<span class="wide">Report</span></button>${Store.meta.role === 'admin' ? `<button class="icon-btn" id="delBtn" aria-label="Remove student" title="Remove student">${icon('delete')}</button>` : ''}`, hero + body);
@@ -440,9 +446,10 @@ function studentPage(uid, tab) {
   if ($('#delBtn')) $('#delBtn').onclick = async () => { if (!confirm('Remove ' + (s.name || 'this student') + ' from the shared database for everyone?')) return; try { await Store.remove(uid); toast('Student removed.'); go('students'); } catch (e) { toast(e.message); } };
   const c = $('#content');
   c.onclick = e => {
-    const t = e.target.closest('[data-lesson],[data-exam],[data-att],[data-ms],[data-filter],[data-addatt],[data-gotab]');
+    const t = e.target.closest('[data-lesson],[data-exam],[data-att],[data-ms],[data-filter],[data-addatt],[data-gotab],[data-goreport]');
     if (!t) return;
-    if (t.dataset.lesson) editLesson(uid, t.dataset.lesson);
+    if (t.dataset.goreport !== undefined) go('report/' + uid);
+    else if (t.dataset.lesson) editLesson(uid, t.dataset.lesson);
     else if (t.dataset.exam) editExam(uid, t.dataset.exam);
     else if (t.dataset.att !== undefined) editAttendance(uid, Number(t.dataset.att));
     else if (t.dataset.addatt !== undefined) editAttendance(uid, -1);
@@ -470,7 +477,7 @@ function overviewTab(r, s, f) {
   </div>`;
 }
 
-const dot = st => `<span class="dot ${st === 'Completed' || st === 'Passed' ? 'done' : st === 'In progress' ? 'prog' : st === 'Failed' ? 'fail' : ''}">${st === 'Completed' || st === 'Passed' ? `<svg viewBox="0 0 24 24"><path d="${ICON.check}"/></svg>` : st === 'Failed' ? `<svg viewBox="0 0 24 24"><path d="${ICON.close}"/></svg>` : ''}</span>`;
+const dot = st => `<span class="dot ${st === 'Completed' || st === 'Passed' ? 'done' : st === 'In progress' ? 'prog' : st === 'Failed' ? 'fail' : ''}">${st === 'Completed' || st === 'Passed' ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">${ICON.check}</svg>` : st === 'Failed' ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">${ICON.close}</svg>` : ''}</span>`;
 
 function lessonsTab(s) {
   let todo = 0, prog = 0, done = 0;
@@ -485,7 +492,8 @@ function lessonsTab(s) {
     const notes = String(v.notes || ''), smart = (notes.split('\n').find(x => x.startsWith('Smart: ')) || '').slice(7), other = notes.replace(/^Smart: .*$/gm, '').trim();
     out += `<div class="li" data-lesson="${esc(id)}">${dot(v.status)}<div class="t"><b>${esc(label(id))}</b><small>${esc((l ? l.duration + ' · ' + l.mode : '') + (smart ? ' · ' + smart : ''))}</small>${other ? `<em>${esc(other.replace(/\n/g, ' '))}</em>` : ''}</div>${v.status === 'In progress' ? '<span class="pill amber">In progress</span>' : ''}${icon('chevron')}</div>`;
   }
-  return `<div class="chips">${[['all', 'All', todo + prog + done], ['todo', 'To do', todo + prog], ['progress', 'In progress', prog], ['done', 'Completed', done]].map(([k, l, n]) => `<button class="chip ${k === fl ? 'on' : ''}" data-filter="${k}">${l}<small>${n}</small></button>`).join('')}</div><div class="list">${out || '<div class="empty">Nothing here.</div>'}</div>`;
+  const phases = [['RPL', 'Recreational', v => parseFloat(v.id) <= 33], ['PPL', 'Private', v => parseFloat(v.id) > 33 && parseFloat(v.id) <= 44], ['CPL', 'Commercial', v => parseFloat(v.id) > 44]].map(([k, l, fn]) => { const ls = s.lessons.filter(fn), d = ls.filter(v => v.status === 'Completed').length; return `<div class="phasecard"><div class="t"><b>${k}</b><small>${l}</small><span>${d}<em>/${ls.length}</em></span></div>${bar(ls.length ? d * 100 / ls.length : 0, d && d === ls.length ? '#1f7a4d' : '#16627a')}</div>`; }).join('');
+  return `<div class="phases">${phases}</div><div class="chips">${[['all', 'All', todo + prog + done], ['todo', 'To do', todo + prog], ['progress', 'In progress', prog], ['done', 'Completed', done]].map(([k, l, n]) => `<button class="chip ${k === fl ? 'on' : ''}" data-filter="${k}">${l}<small>${n}</small></button>`).join('')}</div><div class="list">${out || '<div class="empty">Nothing here.</div>'}</div>`;
 }
 
 function examsTab(s) {
@@ -497,8 +505,33 @@ function attendanceTab(s, f) {
   items.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   const low = f.attendance >= 0 && f.attendance < 80;
   const cls = st => st === 'Present' ? 'green' : st === 'Late' ? 'amber' : st === SICK ? '' : 'red';
-  return `<div class="card attsum">${f.attendance < 0 ? ring(0, 84).replace(/>0%</, '>—<') : ring(f.attendance, 84, low ? '#b42318' : '#1f7a4d')}<div style="flex:1"><b style="font-size:18px">${f.sessions} sessions</b><div class="pills"><span class="pill green">${f.present} present</span><span class="pill amber">${f.late} late</span><span class="pill red">${f.absent} absent</span>${f.sick ? `<span class="pill">${f.sick} sick with certificate</span>` : ''}</div>${low ? '<div class="warnline">Below 80% — follow up with the student</div>' : ''}<div class="muted" style="font-size:12.5px;margin-top:8px">${f.hoursRate >= 0 ? 'Attendance is hours on campus and flying against 20 hours a week, from the Aviation 1 in 60 record and flights (see the report). ' : f.attendance < 0 ? 'No attendance record yet: upload the student’s Aviation 1 in 60 report to get their attendance. ' : ''}Sessions below: flights count as attended; sick counts only with a medical certificate; sick without one, excused and no-shows count as absent.</div></div><button class="btn primary" data-addatt>${icon('add')}<span>Record attendance</span></button></div>
+  const rec = (s.records || {}).oneIn60;
+  let top;
+  if (f.hoursRate >= 0 && rec) {
+    const c = CPLReport.core(s, {today: today()});
+    const kpi = (v, l, cls = '') => `<div class="kpi ${cls}"><b>${fig(v)}</b><small>${l}</small></div>`;
+    top = `<div class="card attcard"><div class="atthead">${ring(f.attendance, 84, low ? '#b42318' : '#1f7a4d')}<div class="t"><div class="label">Attendance · ${auDate(c.from)} to ${auDate(c.to)}</div><b>${pct(f.attendance)} of required hours</b><small>Hours on campus and flying against 20 hours a week, from the Aviation 1 in 60 record and flights.</small>${low ? '<div class="warnline">' + icon('warning') + 'Below 80%: follow up with the student</div>' : ''}</div><button class="btn" data-goreport>${icon('report')}<span>Full report</span></button></div>
+      <div class="kpis">${kpi((c.totalMin / 60).toFixed(1) + ' h', 'Hours credited')}${kpi(Math.round(c.reqMin / 60) + ' h', 'Hours required')}${kpi(c.met + ' of ' + c.assess.length, 'Weeks meeting 20 h', c.met < c.assess.length ? 'warn' : '')}${kpi(c.att.length, 'Days attended')}</div>
+      ${weekChart(c.weeks)}</div>`;
+  } else {
+    top = `<div class="card attsum">${f.attendance < 0 ? ring(0, 84).replace(/>0%</, '>—<') : ring(f.attendance, 84, low ? '#b42318' : '#1f7a4d')}<div style="flex:1"><b style="font-size:18px">${f.attendance < 0 ? 'No attendance record yet' : pct(f.attendance) + ' of sessions attended'}</b><div class="muted" style="font-size:13.5px;margin-top:4px">${f.attendance < 0 ? 'Upload the student’s Aviation 1 in 60 report on the Uploads page to see hours against the 20-hour week.' : 'From recorded sessions. Upload the Aviation 1 in 60 report for hours against the 20-hour week.'}</div>${low ? '<div class="warnline">' + icon('warning') + 'Below 80%: follow up with the student</div>' : ''}</div></div>`;
+  }
+  const sess = `<div class="sesshead"><div><h2>Sessions and flights</h2><div class="pills"><span class="pill green">${f.present} present</span>${f.late ? `<span class="pill amber">${f.late} late</span>` : ''}${f.absent ? `<span class="pill red">${f.absent} absent</span>` : ''}${f.sick ? `<span class="pill">${f.sick} sick · certificate</span>` : ''}</div></div><button class="btn primary" data-addatt>${icon('add')}<span>Record attendance</span></button></div>
+  <div class="muted rule">Flights count as attended. Sick counts only with a medical certificate; sick without one, excused and no-shows count as absent.</div>`;
+  return top + sess + `
   <div class="list" style="margin-top:14px">${items.length ? items.map(a => `<div class="li ${a.flight ? 'static' : ''}" ${a.flight ? '' : `data-att="${a.i}"`}><div class="date"><b>${(a.date || '').slice(8, 10)}</b><small>${monthOf(a.date)}</small></div><div class="t"><b style="font-weight:${a.flight ? 500 : 600}">${esc(a.session)}</b>${a.notes ? `<small>${esc(a.notes)}</small>` : ''}</div><span class="pill ${cls(a.status)}">${esc(a.status === SICK ? 'Sick · certificate' : a.status === 'Excused' ? 'Absent' : a.status)}</span></div>`).join('') : '<div class="empty">No attendance recorded yet.</div>'}</div>`;
+}
+// Hours per week against the 20-hour line (report.js core() weeks).
+function weekChart(weeks) {
+  const ws = weeks.slice(-26), W = 720, H = 150, pad = 22, n = ws.length || 1, bw = (W - 8) / n, max = Math.max(1500, ...ws.map(w => w.min)) * 1.08;
+  const y = m => H - pad - (m / max) * (H - pad - 8);
+  const bars = ws.map((w, i) => {
+    const h = Math.max(2, (H - pad) - y(w.min)), x = 4 + i * bw + bw * .16, col = w.progress || w.nr ? '#c3cddb' : w.met ? '#1f7a4d' : w.min >= 960 ? '#b7791f' : '#c2493d';
+    return `<rect x="${x.toFixed(1)}" y="${y(w.min).toFixed(1)}" width="${(bw * .68).toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${col}"><title>Week of ${auDate(w.start)}: ${(w.min / 60).toFixed(1)} h${w.progress ? ' (in progress)' : w.nr ? ' (no record)' : w.met ? ' · met' : ' · under 20 h'}</title></rect>`;
+  }).join('');
+  let lastM = '', labels = '';
+  ws.forEach((w, i) => { const m = w.start.slice(5, 7); if (m !== lastM) { labels += `<text x="${(4 + i * bw).toFixed(1)}" y="${H - 6}" class="cl">${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+m - 1]}</text>`; lastM = m; } });
+  return `<div class="chart"><div class="ch"><b>Hours per week</b><span><i class="lg met"></i>20 h met <i class="lg under"></i>Under <i class="lg inprog"></i>In progress</span></div><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Hours attended per week against 20 hours">${bars}<line x1="0" x2="${W}" y1="${y(1200).toFixed(1)}" y2="${y(1200).toFixed(1)}" class="req"/><text x="${W - 4}" y="${(y(1200) - 5).toFixed(1)}" class="cl r">20 h</text>${labels}</svg></div>`;
 }
 const monthOf = iso => { const m = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][Number((iso || '').slice(5, 7)) - 1]; return m ? m + ' ' + iso.slice(2, 4) : ''; };
 
@@ -610,13 +643,23 @@ function overview() {
     const c = shortCourse(r.state.course); courses.set(c, (courses.get(c) || 0) + 1);
   }
   low.sort((a, b) => a[1] - b[1]); over.sort((a, b) => b[1] - a[1]);
+  // School flying per week, last 12 weeks (Monday starts).
+  const mon = d => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() - (x.getUTCDay() + 6) % 7); return x.toISOString().slice(0, 10); };
+  const thisMon = mon(today()), wk = [];
+  for (let i = 11; i >= 0; i--) { const x = new Date(thisMon + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() - 7 * i); wk.push({start: x.toISOString().slice(0, 10), h: 0, n: 0}); }
+  const wkIdx = new Map(wk.map((w, i) => [w.start, i]));
+  for (const r of all) for (const x of r.state.flights || []) { if (!x.date || x.date < wk[0].start) continue; const i = wkIdx.get(mon(x.date)); if (i !== undefined) { wk[i].h += x.hours || 0; wk[i].n++; } }
+  const wmax = Math.max(1, ...wk.map(w => w.h));
+  const flyChart = `<div class="card"><div class="ch2"><div><h2>Flying across the school</h2><div class="sub">Hours flown per week, last 12 weeks</div></div><div class="big">${fig(wk.slice(-4).reduce((a, w) => a + w.h, 0).toFixed(0) + ' h')}<small>last 4 weeks</small></div></div>
+    <div class="wbars">${wk.map((w, i) => `<div class="wb ${i === wk.length - 1 ? 'now' : ''}" title="Week of ${auDate(w.start)}: ${w.h.toFixed(1)} h, ${w.n} flights"><i style="height:${Math.max(2, w.h / wmax * 100)}%"></i><b>${w.h ? w.h.toFixed(0) : ''}</b><small>${+w.start.slice(8, 10)} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+w.start.slice(5, 7) - 1]}</small></div>`).join('')}</div></div>`;
   const recent = all.slice().sort((a, b) => (b.updated || 0) - (a.updated || 0)).slice(0, 6).map(r => [r, r]);
   const h = new Date().getHours(), first = (Store.meta.user || '').split(' ')[0];
   const sect = (title, sub, rows, fmt, cls) => `<div class="card"><div style="display:flex;align-items:center;gap:8px"><h2 style="flex:1">${title}</h2>${rows.length && cls ? `<span class="pill ${cls}">${rows.length}</span>` : ''}</div>${sub ? `<div class="sub">${sub}</div>` : ''}<div style="margin-top:8px">${rows.length ? rows.slice(0, 6).map(([r, v]) => `<div class="prow" data-open="${r.uid}">${avatar(r.state.name, 36)}<div class="t"><b>${esc(r.state.name)}</b><small>${esc(cls ? shortCourse(r.state.course) : 'Updated ' + fmt(v) + (r.by ? ' by ' + r.by : ''))}</small></div>${cls ? `<span class="pill ${cls}">${fmt(v)}</span>` : icon('chevron')}</div>`).join('') : '<div class="muted" style="padding:8px 0">Nothing to show.</div>'}</div></div>`;
   const cs = [...courses].sort((a, b) => b[1] - a[1]).slice(0, 8), max = cs.length ? cs[0][1] : 1;
   app.innerHTML = frame('<h1>Overview</h1>', 'Across all students', '', `
    <section class="welcome"><h2>${h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'}${first ? ', ' + esc(first) : ''}</h2><p>Here’s where the school stands today.</p>
-   <div class="stats"><div><b>${all.length}</b><small>Students</small></div><div><b>${active}</b><small>Active (90 days)</small></div><div><b>${mf}</b><small>Flights, last 30 days</small></div><div class="gold"><b>${mh.toFixed(0)} h</b><small>Flown, last 30 days</small></div></div></section>
+   <div class="stats"><div><b>${all.length}</b><small>Students</small></div><div><b>${active}</b><small>Active (90 days)</small></div><div><b>${mf}</b><small>Flights, last 30 days</small></div><div class="gold"><b>${fig(mh.toFixed(0) + ' h')}</b><small>Flown, last 30 days</small></div></div></section>
+   <div style="margin-top:16px">${flyChart}</div>
    <div class="grid g3" style="margin-top:16px">${sect('Attendance below 80%', 'Active students only', low, pct, 'red')}${sect('Over syllabus hours', 'Highest estimated overfly at an hour review', over, money, 'amber')}${sect('Recently updated', '', recent, r => ago(r.updated), '')}</div>
    <div class="card" style="margin-top:16px"><h2>Courses</h2>${cs.map(([c, n]) => `<div class="cbar"><div class="t"><span>${esc(c)}</span><b>${n}</b></div>${bar(n * 100 / max)}</div>`).join('')}</div>`);
   $('#content').onclick = e => { const o = e.target.closest('[data-open]'); if (o) go('student/' + o.dataset.open + '/overview'); };
