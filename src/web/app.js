@@ -354,10 +354,9 @@ function login() {
   <div class="kicker">Integrated Commercial Pilot Licence</div><h1>CPL Student Progress</h1><p>Training records, attendance and flight history for every student — live across the school.</p>
   <form class="card" id="loginForm"><h2>Sign in</h2><p class="muted" style="margin:4px 0 16px;color:var(--muted)">Enter the personal access code from your administrator.</p>
   <label class="field"><span>Access code</span><input id="code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX" style="letter-spacing:.08em"></label>
-  <div class="err" id="err" hidden></div><button class="btn primary" style="width:100%" id="go">Sign in</button><button type="button" class="linkbtn" id="srv">Server settings</button></form>
+  <div class="err" id="err" hidden></div><button class="btn primary" style="width:100%" id="go">Sign in</button></form>
   ${iosInstall()}<div class="foot">Moorabbin Aviation Services · Australian National Airline College<br><a href="app/CPLTracker.apk" style="color:#ffffffc0">Get the Android app</a></div></div></div>`;
   let url = Store.meta.url || SERVER;
-  $('#srv').onclick = () => sheet('Server', `<label class="field"><span>Server address</span><input id="srvUrl" value="${esc(url)}"></label>`, `<button class="btn primary" id="srvSave">Save</button>`, (el, close) => { el.querySelector('#srvSave').onclick = () => { url = el.querySelector('#srvUrl').value.trim(); close(); }; });
   $('#loginForm').onsubmit = async e => {
     e.preventDefault();
     const code = $('#code').value.trim();
