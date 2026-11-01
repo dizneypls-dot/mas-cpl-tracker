@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="app.cpltracker.mas" android:versionCode="14" android:versionName="2.2.2">
+    package="app.cpltracker.mas" android:versionCode="15" android:versionName="2.3.0">
     <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="34" />
     <!-- Internet: the shared student database and app updates from the website. -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -29,6 +29,8 @@
         <activity android:name=".StudentActivity" android:exported="false" android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize" />
         <activity android:name=".ScanActivity" android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize" />
+        <activity android:name=".PeopleActivity" android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize" />
         <activity android:name=".ReportActivity" android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize" />

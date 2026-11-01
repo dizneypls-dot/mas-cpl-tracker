@@ -19,6 +19,10 @@ API (JSON, header  Authorization: Bearer <code>):
                                                else saved first (the app merges and retries)
     DELETE /api/students/<uid>              (admin)
     GET    /api/audit?limit=200             (admin) who changed what, newest first
+    GET    /api/users                       (admin) people who can sign in
+    POST   /api/users                       (admin) body {"name", "role"} -> {"code"} shown once
+    POST   /api/users/<id>/code             (admin) a new code for that person; the old one stops working
+    DELETE /api/users/<id>                  (admin)
     POST   /api/scan                        body {"name", "mime", "data" (base64)} -> {"id"}
                                                Claude reads the file and proposes record changes
     GET    /api/scans                       recent scans (yours; an admin sees everyone's)
@@ -122,6 +126,77 @@ def code_hash(code):
 
 def users():
     return read_json("users.json", {})
+
+
+users_lock = threading.Lock()
+
+
+def new_code():
+    return "-".join(secrets.token_hex(2).upper() for _ in range(4))
+
+
+def save_users(us):
+    write_json("users.json", us)
+    os.chmod(path("users.json"), 0o600)
+
+
+def user_list(me):
+    """People who can sign in (admin only). The id is the start of the code's hash; codes themselves are never stored."""
+    return sorted(({"id": v.get("id") or k[:12], "name": v["name"], "role": v["role"], "created": v.get("created", 0), "by": v.get("by", ""),
+                    "you": v["name"] == me["name"] and v["role"] == me["role"]} for k, v in users().items()), key=lambda x: x["name"].lower())
+
+
+def add_user(me, name, role):
+    name = re.sub(r"\s+", " ", str(name or "")).strip()[:60]
+    if not name:
+        raise ValueError("Enter the person's name.")
+    if role not in ("admin", "instructor"):
+        raise ValueError("Choose Administrator or Instructor.")
+    with users_lock:
+        us = users()
+        if any(v["name"].lower() == name.lower() for v in us.values()):
+            raise ValueError(f"{name} already has a code. Give them a new code instead, or use a different name.")
+        code = new_code()
+        us[code_hash(code)] = {"id": secrets.token_hex(6), "name": name, "role": role, "created": int(time.time() * 1000), "by": me["name"]}
+        save_users(us)
+    audit(me, "user-add", "", "", f"{name} ({role})")
+    return code
+
+
+def find_user(us, uid):
+    hits = [k for k, v in us.items() if (v.get("id") or k[:12]) == uid]
+    return hits[0] if len(hits) == 1 else None
+
+
+def remove_user(me, uid):
+    with users_lock:
+        us = users()
+        k = find_user(us, uid)
+        if not k:
+            raise LookupError("That person is no longer on the list.")
+        v = us[k]
+        if v["name"] == me["name"] and v["role"] == me["role"]:
+            raise ValueError("You can't remove your own access.")
+        if v["role"] == "admin" and sum(1 for x in us.values() if x["role"] == "admin") <= 1:
+            raise ValueError("There must always be at least one administrator.")
+        del us[k]
+        save_users(us)
+    audit(me, "user-remove", "", "", f"{v['name']} ({v['role']})")
+
+
+def reset_user(me, uid):
+    """A new code for someone who lost theirs; the old one stops working at once."""
+    with users_lock:
+        us = users()
+        k = find_user(us, uid)
+        if not k:
+            raise LookupError("That person is no longer on the list.")
+        v = us.pop(k)
+        code = new_code()
+        us[code_hash(code)] = dict(v, id=v.get("id") or k[:12], reset=int(time.time() * 1000))
+        save_users(us)
+    audit(me, "user-newcode", "", "", f"{v['name']} ({v['role']})")
+    return code, v
 
 
 def audit(user, action, uid, name, detail=""):
@@ -548,6 +623,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, {"rev": rev, "students": out})
         if url.path == "/api/scans":
             return self.send(200, {"scans": list_scans(u)})
+        if url.path == "/api/users":
+            if u["role"] != "admin":
+                return self.send(403, {"error": "Only an admin can see who has access."})
+            return self.send(200, {"users": user_list(u)})
         m = re.fullmatch(r"/api/scan/([a-f0-9]{24})", url.path)
         if m:
             job = load_job(m.group(1))
@@ -572,6 +651,20 @@ class Handler(BaseHTTPRequestHandler):
         if not u:
             return
         p = urlparse(self.path).path
+        if p == "/api/users" or re.fullmatch(r"/api/users/[0-9a-f]{12}/code", p):
+            if u["role"] != "admin":
+                return self.send(403, {"error": "Only an admin can give out access codes."})
+            try:
+                if p == "/api/users":
+                    b = self.body()
+                    code = add_user(u, b.get("name"), b.get("role", "instructor"))
+                    return self.send(200, {"code": code, "users": user_list(u)})
+                code, v = reset_user(u, p.split("/")[3])
+                return self.send(200, {"code": code, "name": v["name"], "users": user_list(u)})
+            except LookupError as e:
+                return self.send(404, {"error": str(e)})
+            except ValueError as e:
+                return self.send(400, {"error": str(e)})
         if p == "/api/scan":
             try:
                 b = self.body(limit=MAX_UPLOAD * 4 // 3 + 4096)
@@ -654,6 +747,17 @@ class Handler(BaseHTTPRequestHandler):
         u = self.user()
         if not u:
             return
+        mu = re.fullmatch(r"/api/users/([0-9a-f]{12})", urlparse(self.path).path)
+        if mu:
+            if u["role"] != "admin":
+                return self.send(403, {"error": "Only an admin can remove access."})
+            try:
+                remove_user(u, mu.group(1))
+            except LookupError as e:
+                return self.send(404, {"error": str(e)})
+            except ValueError as e:
+                return self.send(400, {"error": str(e)})
+            return self.send(200, {"users": user_list(u)})
         if u["role"] != "admin":
             return self.send(403, {"error": "Only an admin can remove a student."})
         m = re.fullmatch(r"/api/students/([^/]+)", urlparse(self.path).path)
@@ -734,14 +838,13 @@ def main():
         return print("Saved. Uploads will now be read by Claude.")
     us = users()
     if args.cmd == "add-user":
-        code = "-".join(secrets.token_hex(2).upper() for _ in range(4))
-        us[code_hash(code)] = {"name": args.name, "role": args.role}
-        write_json("users.json", us)
-        os.chmod(path("users.json"), 0o600)
+        code = new_code()
+        us[code_hash(code)] = {"id": secrets.token_hex(6), "name": args.name, "role": args.role, "created": int(time.time() * 1000), "by": "server"}
+        save_users(us)
         print(f"{args.name} ({args.role}) access code: {code}\nGive it to them privately; it is not shown again.")
     elif args.cmd == "remove-user":
         left = {k: v for k, v in us.items() if v["name"] != args.name}
-        write_json("users.json", left)
+        save_users(left)
         print(f"Removed {len(us) - len(left)} code(s) for {args.name}.")
     else:
         for v in us.values():

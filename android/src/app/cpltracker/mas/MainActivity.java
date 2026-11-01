@@ -785,6 +785,10 @@ public class MainActivity extends Activity implements Store.Listener {
         box.addView(sync, Ui.margins(this, 0, 0, 0, 14));
         LinearLayout acts = Ui.card(this);
         acts.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 4));
+        if (store.admin()) {
+            acts.addView(action(R.drawable.ic_people, "People", "Add people and give out access codes", v -> startActivity(new Intent(this, PeopleActivity.class))));
+            acts.addView(Ui.divider(this));
+        }
         acts.addView(action(R.drawable.ic_open, "Open the website", "Same records on any computer", v -> startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(WEBSITE)))));
         acts.addView(Ui.divider(this));
         acts.addView(action(R.drawable.ic_sync, "Check for app updates", "Version " + Updater.versionName(this), v -> Updater.check(this, true)));

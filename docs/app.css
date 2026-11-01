@@ -325,3 +325,4 @@ svg.i{width:22px;height:22px;fill:currentColor;flex:0 0 auto}
 .rtools{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:flex-end;margin-bottom:16px}.rtools .field{margin:0;min-width:150px}
 .rtools .check{display:flex;gap:8px;align-items:center;font-size:14px;padding-bottom:10px}
 .rwrap{overflow:hidden}.rscale{transform-origin:0 0;width:max-content}
+.codebox{font:700 26px/1.2 ui-monospace,Menlo,Consolas,monospace;letter-spacing:2px;text-align:center;padding:16px;border-radius:12px;background:#f2f5f9;border:1px dashed #b8c4d4;margin:4px 0 12px;user-select:all;word-break:break-all}

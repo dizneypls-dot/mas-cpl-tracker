@@ -756,9 +756,59 @@ function account() {
    <div class="card"><h2>Shared database</h2><div style="display:flex;align-items:center;gap:10px;margin:10px 0 4px"><span class="pill ${live ? 'green' : 'amber'}">${live ? 'LIVE' : 'OFFLINE'}</span><span class="muted" style="font-size:13.5px">${live ? 'Changes appear on every device within seconds.' : esc(Store.status)}</span></div>
     ${[['Students', Store.all().length], ['Waiting to save', Store.pending()], ['Last update', Store.lastSync ? ago(Store.lastSync) : '—'], ['Server', (Store.meta.url || SERVER).replace('https://', '')]].map(([k, v]) => `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>`).join('')}</div>
    <div class="card"><h2>More</h2><div style="display:grid;gap:10px;margin-top:12px"><a class="btn" href="app/CPLTracker.apk">${icon('android')}<span>Get the Android app</span></a><a class="btn" href="classic/" target="_blank" rel="noopener">${icon('report')}<span>Classic tracker · reports, Excel, email</span></a><button class="btn danger" id="out">${icon('logout')}<span>Sign out</span></button></div></div>
+   ${Store.meta.role === 'admin' ? `<div class="card" style="grid-column:1/-1"><div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:220px"><h2>People</h2><div class="sub">Everyone who can sign in. Each person gets their own access code, which works on the website (${esc(location.host || 'coursetracker.online')}) and in the app, from anywhere.</div></div><button class="btn primary" id="addUser">${icon('add')}<span>Add a person</span></button></div><div id="people" class="list" style="margin-top:12px"><div class="muted">Loading…</div></div></div>` : ''}
   </div>`);
+  if (Store.meta.role === 'admin') People.load(Date.now() - People.at < 60000 ? People.items : null);
   $('#out').onclick = async () => { if (!confirm(Store.pending() ? Store.pending() + ' change(s) have not reached the server and will be lost. Sign out?' : 'Sign out of this computer?')) return; await Store.signOut(); render(); };
 }
+
+// ---------- people (admin): access codes ----------
+const People = {
+  items: [], at: 0,
+  async load(list) {
+    try { if (!list) this.at = Date.now(); this.items = list || (await Store.api('GET', '/api/users')).users || []; } catch (e) { const b = $('#people'); if (b) b.innerHTML = `<div class="muted">${esc(e.message)}</div>`; return; }
+    const box = $('#people'); if (!box) return;
+    box.innerHTML = this.items.map(u => `<div class="li static">${avatar(u.name, 38)}<div class="t"><b>${esc(u.name)}${u.you ? ' <span class="muted" style="font-weight:400">(you)</span>' : ''}</b><small>${u.role === 'admin' ? 'Administrator' : 'Instructor'}${u.created ? ' · added ' + ago(u.created) + (u.by ? ' by ' + esc(u.by) : '') : ''}</small></div>
+      <button class="btn ghost" data-newcode="${u.id}" title="Give ${esc(u.name)} a new code (the old one stops working)">New code</button>${u.you ? '' : `<button class="icon-btn" data-remove="${u.id}" aria-label="Remove ${esc(u.name)}" title="Remove access">${icon('delete')}</button>`}</div>`).join('') || '<div class="muted">No one yet.</div>';
+    box.onclick = e => {
+      const n = e.target.closest('[data-newcode]'), r = e.target.closest('[data-remove]');
+      if (n) this.newCode(this.items.find(x => x.id === n.dataset.newcode));
+      else if (r) this.remove(this.items.find(x => x.id === r.dataset.remove));
+    };
+    const add = $('#addUser'); if (add) add.onclick = () => this.add();
+  },
+  add() {
+    sheet('Add a person', `<label class="field"><span>Name</span><input id="uName" autocomplete="off" placeholder="e.g. Jane Smith"></label><div class="field"><span>Access</span>${seg(['Instructor', 'Administrator'], 'Instructor', 'role')}</div><p class="muted" style="font-size:13px;margin:12px 0 0">Instructors can see and update every student and upload files. Administrators can also remove students and manage people.</p>`,
+      `<button class="btn" data-x>Cancel</button><button class="btn primary" id="uSave">Create code</button>`, (el, close) => {
+        wireSeg(el);
+        el.querySelector('[data-x]').onclick = close;
+        el.querySelector('#uName').focus();
+        el.querySelector('#uSave').onclick = async () => {
+          const name = el.querySelector('#uName').value.trim(), role = segValue(el, 'role') === 'Administrator' ? 'admin' : 'instructor';
+          if (!name) return toast('Enter the person’s name.');
+          try { const r = await Store.api('POST', '/api/users', {name, role}); close(); this.at = Date.now(); this.load(r.users); this.show(name, r.code); } catch (e) { toast(e.message); }
+        };
+      });
+  },
+  async newCode(u) {
+    if (!u || !confirm(`Give ${u.name} a new access code? Their current code stops working straight away${u.you ? ' (including on this device after you sign out)' : ''}.`)) return;
+    try { const r = await Store.api('POST', '/api/users/' + u.id + '/code', {}); this.load(r.users); if (u.you) { Store.meta.code = r.code; Store.saveMeta(); } this.show(u.name, r.code); } catch (e) { toast(e.message); }
+  },
+  async remove(u) {
+    if (!u || !confirm(`Remove ${u.name}'s access? Their code stops working on every device.`)) return;
+    try { const r = await Store.api('DELETE', '/api/users/' + u.id); this.load(r.users); toast(u.name + ' removed.'); } catch (e) { toast(e.message); }
+  },
+  show(name, code) {
+    const site = location.origin.includes('coursetracker.online') ? location.origin : 'https://coursetracker.online';
+    const msg = `CPL Tracker access for ${name}\nSign in at ${site} or in the Android app (${site}/app/CPLTracker.apk)\nAccess code: ${code}`;
+    sheet('Access code for ' + name, `<p style="margin:0 0 10px">Give this code to ${esc(name)} privately. It is shown only now; if it's lost, give them a new code.</p><div class="codebox">${esc(code)}</div><p class="muted" style="font-size:13px">They sign in at <b>${esc(site.replace('https://', ''))}</b> or in the Android app, from any device.</p>`,
+      `<button class="btn" id="cCopy">${icon('file')}<span>Copy message</span></button>${navigator.share ? `<button class="btn" id="cShare"><span>Share</span></button>` : ''}<button class="btn primary" data-x>Done</button>`, (el, close) => {
+        el.querySelector('[data-x]').onclick = close;
+        el.querySelector('#cCopy').onclick = async () => { try { await navigator.clipboard.writeText(msg); toast('Copied. Paste it into a private message.'); } catch (e) { toast('Copy failed; write the code down instead.'); } };
+        const sh = el.querySelector('#cShare'); if (sh) sh.onclick = () => navigator.share({text: msg}).catch(() => {});
+      });
+  },
+};
 
 // ---------- start ----------
 let renderTimer = null;
