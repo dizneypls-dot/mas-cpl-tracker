@@ -120,8 +120,17 @@ def read_json(name, default):
         return default
 
 
+def canon_code(code):
+    """Codes are four groups of four hex digits. Accept them however they are typed: lower case, spaces,
+    no dashes, or O/I/L typed for 0/1 (none of those letters can be in a code)."""
+    c = re.sub(r"[^0-9A-Za-z]", "", str(code or "")).upper().translate(str.maketrans("OIL", "011"))
+    if re.fullmatch(r"[0-9A-F]{16}", c):
+        return "-".join(c[i:i + 4] for i in range(0, 16, 4))
+    return str(code or "").strip()
+
+
 def code_hash(code):
-    return hashlib.sha256(code.strip().encode()).hexdigest()
+    return hashlib.sha256(canon_code(code).encode()).hexdigest()
 
 
 def users():
