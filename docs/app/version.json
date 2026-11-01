@@ -1,6 +1,6 @@
 {
- "versionCode": 16,
- "versionName": "2.3.1",
+ "versionCode": 17,
+ "versionName": "2.4.0",
  "apk": "CPLTracker.apk",
- "notes": "Reports use Smart's cancellation totals from cancellation report PDFs."
+ "notes": "New look: Inter typeface, refreshed design, and quick filters for students who need attention."
 }
