@@ -1,6 +1,6 @@
 {
- "versionCode": 18,
- "versionName": "3.0.0",
+ "versionCode": 19,
+ "versionName": "3.0.1",
  "apk": "CPLTracker.apk",
- "notes": "New app: the same screens and design as coursetracker.online, with Save PDF, uploads and sharing files to the app."
+ "notes": "Fixes the app closing on start in 3.0.0."
 }
