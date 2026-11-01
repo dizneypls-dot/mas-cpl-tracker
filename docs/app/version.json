@@ -1,6 +1,6 @@
 {
- "versionCode": 17,
- "versionName": "2.4.0",
+ "versionCode": 18,
+ "versionName": "3.0.0",
  "apk": "CPLTracker.apk",
- "notes": "New look: Inter typeface, refreshed design, and quick filters for students who need attention."
+ "notes": "New app: the same screens and design as coursetracker.online, with Save PDF, uploads and sharing files to the app."
 }
