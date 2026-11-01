@@ -341,7 +341,7 @@ function login() {
   <form class="card" id="loginForm"><h2>Sign in</h2><p class="muted" style="margin:4px 0 16px;color:var(--muted)">Enter the personal access code from your administrator.</p>
   <label class="field"><span>Access code</span><input id="code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX" style="letter-spacing:.08em"></label>
   <div class="err" id="err" hidden></div><button class="btn primary" style="width:100%" id="go">Sign in</button><button type="button" class="linkbtn" id="srv">Server settings</button></form>
-  <div class="foot">Moorabbin Aviation Services · Australian National Airline College<br><a href="app/CPLTracker.apk" style="color:#ffffffc0">Get the Android app</a></div></div></div>`;
+  ${iosInstall()}<div class="foot">Moorabbin Aviation Services · Australian National Airline College<br><a href="app/CPLTracker.apk" style="color:#ffffffc0">Get the Android app</a></div></div></div>`;
   let url = Store.meta.url || SERVER;
   $('#srv').onclick = () => sheet('Server', `<label class="field"><span>Server address</span><input id="srvUrl" value="${esc(url)}"></label>`, `<button class="btn primary" id="srvSave">Save</button>`, (el, close) => { el.querySelector('#srvSave').onclick = () => { url = el.querySelector('#srvUrl').value.trim(); close(); }; });
   $('#loginForm').onsubmit = async e => {
@@ -756,10 +756,21 @@ function account() {
    <div class="card"><h2>Shared database</h2><div style="display:flex;align-items:center;gap:10px;margin:10px 0 4px"><span class="pill ${live ? 'green' : 'amber'}">${live ? 'LIVE' : 'OFFLINE'}</span><span class="muted" style="font-size:13.5px">${live ? 'Changes appear on every device within seconds.' : esc(Store.status)}</span></div>
     ${[['Students', Store.all().length], ['Waiting to save', Store.pending()], ['Last update', Store.lastSync ? ago(Store.lastSync) : '—'], ['Server', (Store.meta.url || SERVER).replace('https://', '')]].map(([k, v]) => `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>`).join('')}</div>
    <div class="card"><h2>More</h2><div style="display:grid;gap:10px;margin-top:12px"><a class="btn" href="app/CPLTracker.apk">${icon('android')}<span>Get the Android app</span></a><a class="btn" href="classic/" target="_blank" rel="noopener">${icon('report')}<span>Classic tracker · reports, Excel, email</span></a><button class="btn danger" id="out">${icon('logout')}<span>Sign out</span></button></div></div>
+   ${iosInstall() ? `<div class="card">${iosInstall()}</div>` : ''}
    ${Store.meta.role === 'admin' ? `<div class="card" style="grid-column:1/-1"><div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:220px"><h2>People</h2><div class="sub">Everyone who can sign in. Each person gets their own access code, which works on the website (${esc(location.host || 'coursetracker.online')}) and in the app, from anywhere.</div></div><button class="btn primary" id="addUser">${icon('add')}<span>Add a person</span></button></div><div id="people" class="list" style="margin-top:12px"><div class="muted">Loading…</div></div></div>` : ''}
   </div>`);
   if (Store.meta.role === 'admin') People.load(Date.now() - People.at < 60000 ? People.items : null);
   $('#out').onclick = async () => { if (!confirm(Store.pending() ? Store.pending() + ' change(s) have not reached the server and will be lost. Sign out?' : 'Sign out of this computer?')) return; await Store.signOut(); render(); };
+}
+
+// ---------- iPhone / iPad: install as an app (Safari has no install button, so say how) ----------
+const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const STANDALONE = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+const SHARE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2l4 4-1.4 1.4L13 5.8V15h-2V5.8L9.4 7.4 8 6l4-4zM5 10h3v2H6v8h12v-8h-2v-2h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V11a1 1 0 0 1 1-1z"/></svg>';
+function iosInstall() {
+  if (!IOS || STANDALONE) return '';
+  const safari = !/CriOS|FxiOS|EdgiOS|GSA\//.test(navigator.userAgent);
+  return `<div class="iosinstall">${SHARE_ICON}<div><b>Install on your ${/iPad/.test(navigator.userAgent) ? 'iPad' : 'iPhone'}</b><br>${safari ? 'Tap the Share button ' : 'Open this page in Safari, tap Share '}then <b>Add to Home Screen</b>. CPL Tracker then opens full screen from its own icon, like an app.</div></div>`;
 }
 
 // ---------- people (admin): access codes ----------
