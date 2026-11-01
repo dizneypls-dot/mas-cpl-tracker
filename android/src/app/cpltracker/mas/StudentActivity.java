@@ -556,7 +556,7 @@ public class StudentActivity extends Activity implements Store.Listener {
         LinearLayout sr = Ui.row(this);
         Ui.Ring ring = new Ui.Ring(this, Ui.CHIP_BG, Ui.NAVY);
         boolean low = f.attendance >= 0 && f.attendance < 80;
-        ring.set(Math.max(0, f.attendance), low ? Ui.RED : Ui.GREEN);
+        ring.set(f.attendance, low ? Ui.RED : Ui.GREEN);
         sr.addView(ring, new LinearLayout.LayoutParams(Ui.dp(this, 72), Ui.dp(this, 72)));
         LinearLayout sc = Ui.col(this);
         sc.setPadding(Ui.dp(this, 16), 0, 0, 0);
@@ -571,7 +571,7 @@ public class StudentActivity extends Activity implements Store.Listener {
         if (low) { TextView w = Ui.text(this, "Below 80% — follow up with the student", 13, Ui.RED, true); w.setPadding(0, Ui.dp(this, 6), 0, 0); sc.addView(w); }
         sr.addView(sc, Ui.weight(1));
         sum.addView(sr);
-        TextView rule = Ui.text(this, "Flights count as attended. Sick counts only with a medical certificate; sick without one, excused and no-shows count as absent.", 12, Ui.MUTED, false);
+        TextView rule = Ui.text(this, (f.hoursRate >= 0 ? "Attendance is hours on campus and flying against 20 hours a week, from the Aviation 1 in 60 record and flights (see the report). " : f.attendance < 0 ? "No attendance record yet: upload the student's Aviation 1 in 60 report to get their attendance. " : "") + "Sessions: flights count as attended; sick counts only with a medical certificate; sick without one, excused and no-shows count as absent.", 12, Ui.MUTED, false);
         rule.setPadding(0, Ui.dp(this, 10), 0, 0);
         sum.addView(rule);
         sum.addView(Ui.button(this, "Record attendance", true, v -> editAttendance(-1)), Ui.margins(this, 0, 12, 0, 0));

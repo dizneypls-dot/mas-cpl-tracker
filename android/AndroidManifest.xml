@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="app.cpltracker.mas" android:versionCode="13" android:versionName="2.2.1">
+    package="app.cpltracker.mas" android:versionCode="14" android:versionName="2.2.2">
     <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="34" />
     <!-- Internet: the shared student database and app updates from the website. -->
     <uses-permission android:name="android.permission.INTERNET" />

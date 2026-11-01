@@ -90,7 +90,12 @@ function figures(s) {
   for (const a of s.attendance || []) { if (a.status === 'Present') f.present++; else if (a.status === 'Late') f.late++; else if (a.status === SICK) f.sick++; else f.absent++; }
   f.sessions = f.present + f.late + f.absent + f.sick;
   const counted = f.sessions - f.sick;
-  if (counted > 0) f.attendance = (f.present + f.late) * 100 / counted;
+  // Flights alone never make an attendance figure (every one would be "present", giving 100%).
+  // With an Aviation 1 in 60 record the figure is hours attended against 20 h a week, as in the report;
+  // otherwise it needs recorded sessions with at least one that was not a flight.
+  f.hoursRate = CPLReport.rate(s, today());
+  if (f.hoursRate >= 0) f.attendance = f.hoursRate;
+  else if (counted > 0 && counted > f.flights) f.attendance = (f.present + f.late) * 100 / counted;
   return f;
 }
 const MILESTONES = [10, 21, 30, 37];
@@ -474,7 +479,7 @@ function attendanceTab(s, f) {
   items.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   const low = f.attendance >= 0 && f.attendance < 80;
   const cls = st => st === 'Present' ? 'green' : st === 'Late' ? 'amber' : st === SICK ? '' : 'red';
-  return `<div class="card attsum">${ring(Math.max(0, f.attendance), 84, low ? '#b42318' : '#1f7a4d')}<div style="flex:1"><b style="font-size:18px">${f.sessions} sessions</b><div class="pills"><span class="pill green">${f.present} present</span><span class="pill amber">${f.late} late</span><span class="pill red">${f.absent} absent</span>${f.sick ? `<span class="pill">${f.sick} sick with certificate</span>` : ''}</div>${low ? '<div class="warnline">Below 80% — follow up with the student</div>' : ''}<div class="muted" style="font-size:12.5px;margin-top:8px">Flights count as attended. Sick counts only with a medical certificate; sick without one, excused and no-shows count as absent.</div></div><button class="btn primary" data-addatt>${icon('add')}<span>Record attendance</span></button></div>
+  return `<div class="card attsum">${f.attendance < 0 ? ring(0, 84).replace(/>0%</, '>—<') : ring(f.attendance, 84, low ? '#b42318' : '#1f7a4d')}<div style="flex:1"><b style="font-size:18px">${f.sessions} sessions</b><div class="pills"><span class="pill green">${f.present} present</span><span class="pill amber">${f.late} late</span><span class="pill red">${f.absent} absent</span>${f.sick ? `<span class="pill">${f.sick} sick with certificate</span>` : ''}</div>${low ? '<div class="warnline">Below 80% — follow up with the student</div>' : ''}<div class="muted" style="font-size:12.5px;margin-top:8px">${f.hoursRate >= 0 ? 'Attendance is hours on campus and flying against 20 hours a week, from the Aviation 1 in 60 record and flights (see the report). ' : f.attendance < 0 ? 'No attendance record yet: upload the student’s Aviation 1 in 60 report to get their attendance. ' : ''}Sessions below: flights count as attended; sick counts only with a medical certificate; sick without one, excused and no-shows count as absent.</div></div><button class="btn primary" data-addatt>${icon('add')}<span>Record attendance</span></button></div>
   <div class="list" style="margin-top:14px">${items.length ? items.map(a => `<div class="li ${a.flight ? 'static' : ''}" ${a.flight ? '' : `data-att="${a.i}"`}><div class="date"><b>${(a.date || '').slice(8, 10)}</b><small>${monthOf(a.date)}</small></div><div class="t"><b style="font-weight:${a.flight ? 500 : 600}">${esc(a.session)}</b>${a.notes ? `<small>${esc(a.notes)}</small>` : ''}</div><span class="pill ${cls(a.status)}">${esc(a.status === SICK ? 'Sick · certificate' : a.status === 'Excused' ? 'Absent' : a.status)}</span></div>`).join('') : '<div class="empty">No attendance recorded yet.</div>'}</div>`;
 }
 const monthOf = iso => { const m = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][Number((iso || '').slice(5, 7)) - 1]; return m ? m + ' ' + iso.slice(2, 4) : ''; };

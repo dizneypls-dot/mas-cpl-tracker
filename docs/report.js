@@ -96,7 +96,8 @@ function progress(s, cat) {
   return f;
 }
 
-function render(s, cat, opts) {
+// The attendance figures: credited days, weeks against 20 h, the rate. Shared by the report and the tracker's tiles.
+function core(s, opts) {
   opts = opts || {};
   const today = opts.today || new Date().toLocaleDateString('en-CA', {timeZone: 'Australia/Melbourne'});
   const R = s.records || {}, rec = R.oneIn60 || null;
@@ -155,6 +156,14 @@ function render(s, cat, opts) {
   const by = b => att.filter(d => d.basis === b);
   const scanDays = by('scan'), flatDays = by('flat'), flownDays = by('flown');
   const progressWeek = weeks.find(w => w.progress);
+  return {today, R, rec, flights, flown, from, to, covered, days, ground, weeks, assess, att, totalMin, assessMin, reqMin, rate, met, scanDays, flatDays, flownDays, progressWeek};
+}
+// Attendance % for the tracker: hours attended against 20 h a week, or -1 without an Aviation 1 in 60 record.
+function rate(s, today) { if (!s || !s.records || !s.records.oneIn60) return -1; const c = core(s, {today}); return c.rate === null ? -1 : c.rate; }
+
+function render(s, cat, opts) {
+  opts = opts || {};
+  const {today, R, rec, flights, flown, from, to, covered, days, ground, weeks, assess, att, totalMin, assessMin, reqMin, rate, met, scanDays, flatDays, flownDays, progressWeek} = core(s, opts);
 
   // ---- months ----
   const months = [];
@@ -411,7 +420,7 @@ const CSS = `@page{size:A4 landscape;margin:10mm 12mm 14mm 12mm;@bottom-left{con
 .rpt table.lessons td{padding:3px 6px;font-size:8.5px}
 @media screen{.rpt{width:273mm;margin:0 auto;padding:14mm 12mm;box-shadow:0 2px 18px rgba(16,24,40,.12);border-radius:4px}}`;
 
-const api = {render, css: CSS, holidays};
+const api = {render, rate, core, css: CSS, holidays};
 if (typeof window !== 'undefined') window.CPLReport = api;
 if (typeof module !== 'undefined') module.exports = api;
 })();

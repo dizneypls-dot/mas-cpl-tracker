@@ -95,7 +95,7 @@ final class Course {
 
     // ---------- figures ----------
     static final class Figures {
-        double practical, theory, overall, attendance = -1, hours, solo, ifr;
+        double practical, theory, overall, attendance = -1, hoursRate = -1, hours, solo, ifr;
         int done, flights, present, late, absent, sick, sessions;
         String next = "Course complete", lastFlight = "", last = "", lastDate = "";
         int gaps;
@@ -179,8 +179,90 @@ final class Course {
         }
         f.sessions = f.present + f.late + f.absent + f.sick;
         int counted = f.sessions - f.sick;
-        if (counted > 0) f.attendance = (f.present + f.late) * 100.0 / counted;
+        // Same rule as the website: flights alone never make an attendance figure; with an Aviation 1 in 60
+        // record it is hours attended against 20 h a week (as in the report).
+        f.hoursRate = hoursRate(s, today());
+        if (f.hoursRate >= 0) f.attendance = f.hoursRate;
+        else if (counted > 0 && counted > f.flights) f.attendance = (f.present + f.late) * 100.0 / counted;
         return f;
+    }
+
+    static String today() {
+        java.text.SimpleDateFormat d = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US);
+        d.setTimeZone(java.util.TimeZone.getTimeZone("Australia/Melbourne"));
+        return d.format(new java.util.Date());
+    }
+
+    // Days since 1970-01-01 and back (java.time needs Android 8).
+    static long day(String iso) {
+        int y = Integer.parseInt(iso.substring(0, 4)), m = Integer.parseInt(iso.substring(5, 7)), d = Integer.parseInt(iso.substring(8, 10));
+        y -= m <= 2 ? 1 : 0;
+        long era = (y >= 0 ? y : y - 399) / 400, yoe = y - era * 400, doy = (153L * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1, doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+        return era * 146097 + doe - 719468;
+    }
+
+    static String iso(long z) {
+        z += 719468;
+        long era = (z >= 0 ? z : z - 146096) / 146097, doe = z - era * 146097, yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365, y = yoe + era * 400;
+        long doy = doe - (365 * yoe + yoe / 4 - yoe / 100), mp = (5 * doy + 2) / 153, d = doy - (153 * mp + 2) / 5 + 1, m = mp + (mp < 10 ? 3 : -9);
+        return String.format(java.util.Locale.US, "%04d-%02d-%02d", y + (m <= 2 ? 1 : 0), m, d);
+    }
+
+    private static int minutes(String t) { return Integer.parseInt(t.substring(0, 2)) * 60 + Integer.parseInt(t.substring(3, 5)); }
+
+    // Hours attended against 20 h for every completed, recorded week (report.js core()), or -1 without a record.
+    static double hoursRate(JSONObject s, String today) {
+        try {
+            JSONObject recs = s.optJSONObject("records"), rec = recs == null ? null : recs.optJSONObject("oneIn60");
+            if (rec == null) return -1;
+            java.util.Map<Long, Double> fly = new java.util.HashMap<>();
+            JSONArray fl = s.optJSONArray("flights");
+            if (fl != null) for (int i = 0; i < fl.length(); i++) {
+                JSONObject x = fl.optJSONObject(i);
+                if (x == null || x.optString("date").length() < 10 || x.optDouble("hours", 0) <= 0) continue;
+                long k = day(x.optString("date"));
+                fly.put(k, (fly.containsKey(k) ? fly.get(k) : 0) + x.optDouble("hours", 0));
+            }
+            long from = day(rec.getString("from")), to = Math.min(day(rec.getString("to")), day(today));
+            java.util.List<long[]> ranges = new java.util.ArrayList<>();
+            JSONArray rs = rec.optJSONArray("ranges");
+            if (rs != null) for (int i = 0; i < rs.length(); i++) ranges.add(new long[] {day(rs.getJSONArray(i).getString(0)), day(rs.getJSONArray(i).getString(1))});
+            else ranges.add(new long[] {from, day(rec.getString("to"))});
+            java.util.Map<Long, JSONObject> scan = new java.util.HashMap<>();
+            JSONArray ds = rec.optJSONArray("days");
+            if (ds != null) for (int i = 0; i < ds.length(); i++) scan.put(day(ds.getJSONObject(i).getString("date")), ds.getJSONObject(i));
+            java.util.Map<Long, Integer> ground = new java.util.HashMap<>();
+            JSONArray ws = rec.optJSONArray("weeks");
+            if (ws != null) for (int i = 0; i < ws.length(); i++) {
+                JSONObject w = ws.getJSONObject(i);
+                if (w.optString("status").toLowerCase(java.util.Locale.US).contains("progress")) continue;
+                long st = day(w.getString("week"));
+                double sum = 0;
+                for (int k = 0; k < 7; k++) { JSONObject d = scan.get(st + k); if (d != null) sum += d.optDouble("hours", 0); }
+                double extra = Math.round((w.optDouble("attended", 0) - sum) * 10) / 10.0;
+                if (extra >= 0.1 && st <= to && st + 6 >= from) ground.put(st, (int) Math.round(extra * 60));
+            }
+            long assessMin = 0; int assess = 0;
+            for (long wk = from - ((from + 3) % 7 + 7) % 7; wk <= to; wk += 7) {
+                long min = ground.containsKey(wk) ? ground.get(wk) : 0;
+                boolean nr = false;
+                for (long d = wk; d < wk + 7; d++) {
+                    if (d < from || d > to) continue;
+                    boolean cov = false;
+                    for (long[] r : ranges) if (d >= r[0] && d <= r[1]) cov = true;
+                    if (!cov) nr = true;
+                    JSONObject sc = scan.get(d);
+                    String in = sc == null ? "" : sc.optString("in"), out = sc == null ? "" : sc.optString("out");
+                    if (in.length() >= 5 && out.length() >= 5) min += Math.max(0, minutes(out) - minutes(in));
+                    else if (in.length() >= 5) min += 180;
+                    else if (fly.containsKey(d)) min += Math.round(fly.get(d) * 60) + 180;
+                }
+                if (wk + 6 > to || nr) continue;
+                assess++;
+                assessMin += min;
+            }
+            return assess == 0 ? -1 : assessMin * 100.0 / (assess * 1200.0);
+        } catch (Exception e) { return -1; }
     }
 
     static final class Milestone { int id; double planned; Double accrued; Double overfly; Double cost; }

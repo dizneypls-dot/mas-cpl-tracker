@@ -247,7 +247,7 @@ final class Ui {
         void set(double pct, int color) {
             value = Math.max(0, Math.min(100, pct));
             arc.setColor(color);
-            text = (pct >= 99.95 ? "100" : String.format(java.util.Locale.ROOT, pct >= 10 ? "%.0f" : "%.1f", pct)) + "%";
+            text = pct < 0 ? "—" : (pct >= 99.95 ? "100" : String.format(java.util.Locale.ROOT, pct >= 10 ? "%.0f" : "%.1f", pct)) + "%";
             setContentDescription(text + " complete");
             invalidate();
         }
