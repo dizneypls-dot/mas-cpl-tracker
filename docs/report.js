@@ -186,6 +186,15 @@ function render(s, cat, opts) {
   const recAge = rec && rec.generated ? daysBetween(rec.generated.slice(0, 10), today) : 0;
   const missed = (rec ? rec.missed : []).filter(x => x.date >= from && x.date <= to).slice().sort((a, b) => b.date.localeCompare(a.date)).map(x => ({...x, pastDue: x.pastDue + Math.max(0, recAge)}));
   const canc = (R.cancellations || {}).events || [];
+  // Cancellation counts: Smart's own statistics when a report printout supplied them (they cover every event,
+  // even when only the first page was printed); otherwise counted from the events held.
+  const CS = (() => {
+    const C = R.cancellations || {}, sm = C.summary;
+    if (sm && sm.total) return {total: sm.total, flight: sm.flight || 0, reasons: sm.reasons || {}, types: sm.types || {}, range: sm.range || C.range};
+    const reasons = {}, types = {}; for (const c of canc) { const k = c.ctype || 'Not recorded'; reasons[k] = (reasons[k] || 0) + 1; types[c.type] = (types[c.type] || 0) + 1; }
+    return {total: canc.length, flight: canc.filter(c => /flight booking/i.test(c.type)).length, reasons, types, range: C.range || ['', '']};
+  })();
+  const CA = {Student: 0, Operational: 0, Administrative: 0}; for (const [k, v] of Object.entries(CS.reasons)) CA[attribution(k)] += v;
   const evs = ((R.events || {}).events || []);
 
   const sec = [];
@@ -230,7 +239,7 @@ function render(s, cat, opts) {
     if (rec) src.push(`the Aviation 1 in 60 student support record of ${longDate(rec.generated.slice(0, 10))}, which lists ${plural(rec.days.length, 'day')} on campus with sign-in and sign-out times, ${plural(rec.sessions.length, 'course session')} and the weekly hours against requirement`);
     if (flights.length) src.push(`the student's flight records from Smart Aviation, ${plural(logbook.length, 'entry', 'entries')} in this period${logbook.length ? ' to ' + longDate(logbook[logbook.length - 1].date) : ''}`);
     if (evs.length) src.push(`the Smart Aviation event report, whose detail covers ${longDate(evs[0].start.slice(0, 10))} to ${longDate(evs[evs.length - 1].start.slice(0, 10))}`);
-    if (canc.length) src.push(`the Smart Aviation event cancellation report for ${longDate(R.cancellations.range[0])} to ${longDate(R.cancellations.range[1])}`);
+    if (CS.total) src.push(`the Smart Aviation event cancellation report for ${longDate(CS.range[0])} to ${longDate(CS.range[1])}`);
     if (src.length) parts.push(`<b>Sources.</b> ${src.map((x, i) => i ? x : x[0].toUpperCase() + x.slice(1)).join('; ')}.`);
     sec.push(H('Basis of calculation') + parts.map(p => `<p>${p}</p>`).join(''));
   }
@@ -264,10 +273,9 @@ function render(s, cat, opts) {
         F.push(`<b>No attendance record exists before ${longDate(rec.from)}.</b> The student has been in training since ${longDate(startT)}${before.length ? ` - ${plural(before.length, 'flight')}, ${bh.toFixed(1)} hours, appear in the flight records before the attendance record begins` : ''}. Nothing covers that period, so attendance cannot be evidenced for it${evBefore.length ? '; the last section sets out what the event report does show' : ''}.`);
       }
     }
-    if (canc.length) {
-      const att3 = {Student: 0, Operational: 0, Administrative: 0}; for (const c of canc) att3[attribution(c.ctype)]++;
-      const fl = canc.filter(c => /flight booking/i.test(c.type)).length;
-      F.push(`Across ${longDate(R.cancellations.range[0])} to ${longDate(R.cancellations.range[1])}, ${canc.length} of the student's events were cancelled - ${fl} flight events and ${canc.length - fl} non-flight. ${att3.Student} ${att3.Student === 1 ? 'is' : 'are'} attributable to the student and ${att3.Operational} to weather, instructor or aircraft unserviceability; the remaining ${att3.Administrative} carry an administrative reason - rescheduled, other, or created in error - that does not record who caused the cancellation.`);
+    if (CS.total) {
+      const att3 = CA, fl = CS.flight;
+      F.push(`Across ${longDate(CS.range[0])} to ${longDate(CS.range[1])}, ${CS.total} of the student's events were cancelled - ${fl} flight events and ${CS.total - fl} non-flight. ${att3.Student} ${att3.Student === 1 ? 'is' : 'are'} attributable to the student and ${att3.Operational} to weather, instructor or aircraft unserviceability; the remaining ${att3.Administrative} carry an administrative reason - rescheduled, other, or created in error - that does not record who caused the cancellation.`);
     }
     if (P && P.gaps) F.push(`${Num(P.gaps)} syllabus lesson${P.gaps > 1 ? 's' : ''} before the furthest lesson flown ${P.gaps > 1 ? 'are' : 'is'} not marked complete.`);
     if (!F.length) F.push('Nothing in the records for this period calls for follow-up.');
@@ -333,15 +341,15 @@ function render(s, cat, opts) {
   }
 
   // 8. Cancelled events
-  if (canc.length) {
-    const g = {}; for (const c of canc) { const k = c.ctype || 'Not recorded'; g[k] = (g[k] || 0) + 1; }
+  if (CS.total) {
+    const g = CS.reasons;
     const list = Object.entries(g).sort((a, b) => b[1] - a[1]);
-    const rows = list.map(([k, v]) => { const a = attribution(k); return `<tr class="${a === 'Student' ? 'stu' : ''}"><td>${esc(k)}</td><td>${a}</td><td>${v}</td><td>${Math.round(v / canc.length * 100)}%</td></tr>`; });
-    const types = {}; for (const c of canc) types[c.type] = (types[c.type] || 0) + 1;
+    const rows = list.map(([k, v]) => { const a = attribution(k); return `<tr class="${a === 'Student' ? 'stu' : ''}"><td>${esc(k)}</td><td>${a}</td><td>${v}</td><td>${Math.round(v / CS.total * 100)}%</td></tr>`; });
+    const types = CS.types;
     const tl = Object.entries(types).sort((a, b) => b[1] - a[1]).slice(0, 2);
-    const att3 = {Student: 0, Operational: 0, Administrative: 0}; for (const c of canc) att3[attribution(c.ctype)]++;
-    sec.push(H('Cancelled events') + table('canc', ['Cancellation reason recorded', 'Attributable to', 'Events', 'Share'], rows, `<tr><td>TOTAL</td><td></td><td>${canc.length}</td><td>100%</td></tr>`) +
-      note(`From the Smart Aviation event cancellation report for ${longDate(R.cancellations.range[0])} to ${longDate(R.cancellations.range[1])}. Counts are of individual events, so a briefing and its flight count separately; by event type the largest groups are ${tl.map(([k, v]) => v + ' ' + k.toLowerCase() + (v > 1 ? 's' : '')).join(' and ')}. ${att3.Student} are attributable to the student, ${att3.Operational} to weather, instructor or aircraft unserviceability, and ${att3.Administrative} to administrative reasons that do not record a cause.`));
+    const att3 = CA;
+    sec.push(H('Cancelled events') + table('canc', ['Cancellation reason recorded', 'Attributable to', 'Events', 'Share'], rows, `<tr><td>TOTAL</td><td></td><td>${CS.total}</td><td>100%</td></tr>`) +
+      note(`From the Smart Aviation event cancellation report for ${longDate(CS.range[0])} to ${longDate(CS.range[1])}. Counts are of individual events, so a briefing and its flight count separately; by event type the largest groups are ${tl.map(([k, v]) => v + ' ' + k.toLowerCase().replace(/ (dual|solo)$/, '') + (v > 1 ? 's' : '')).join(' and ')}. ${att3.Student} are attributable to the student, ${att3.Operational} to weather, instructor or aircraft unserviceability, and ${att3.Administrative} to administrative reasons that do not record a cause.`));
   }
 
   // 9. Training events before the attendance record

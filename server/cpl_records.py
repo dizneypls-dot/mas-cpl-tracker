@@ -202,6 +202,66 @@ def smart_events(text):
     return {"source": "Smart Aviation event report", "range": rng, "events": events, "name": who}
 
 
+# ---------- Smart cancellation report (PDF printout of the report page) ----------
+
+def cancellations_pdf(text):
+    """The printed page lists only the first results (e.g. 50 of 233), but its Statistics block covers them all."""
+    if "Event Cancellation Report" not in text[:300] or "TOTAL EVENT CANCELLATIONS" not in text:
+        return None
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    m = re.search(r"From (\d\d-\d\d-\d{4}) .*? until (\d\d-\d\d-\d{4})", text)
+    dmy = lambda t: f"{t[6:10]}-{t[3:5]}-{t[0:2]}"
+    rng = [dmy(m.group(1)), dmy(m.group(2))] if m else ["", ""]
+    num = lambda label: int(re.search(label + r"\s*\n\s*(\d+)", text).group(1)) if re.search(label + r"\s*\n\s*(\d+)", text) else 0
+
+    def block(head, ends):
+        try:
+            i = lines.index(head)
+        except ValueError:
+            return {}
+        out, buf = {}, ""
+        for l in lines[i + 1:]:
+            if l in ends:
+                break
+            buf = (buf + ("" if buf.endswith("-") and not buf.endswith(" -") else " ") + l).strip() if buf else l
+            mm = re.fullmatch(r"(.+?) - (\d+)", buf)
+            if mm:
+                out[mm.group(1).strip()] = int(mm.group(2))
+                buf = ""
+        return out
+    heads = ["Top 15 People Involved", "Top 15 Aircraft Involved", "Event Types", "Cancellation Reasons", "Top 15 Cancellers", "TIME DETAILS RESOURCESREASON CANCELLED"]
+    people = block("Top 15 People Involved", heads)
+    total = num("TOTAL EVENT CANCELLATIONS")
+    who = next((n for n, c in people.items() if c == total), "") if total else ""
+    summary = {"total": total, "flight": num("FLIGHT EVENTS CANCELLED"), "nonflight": num("NON-FLIGHT EVENTS CANCELLED"),
+               "types": block("Event Types", heads), "reasons": {full_reason(k): v for k, v in block("Cancellation Reasons", heads).items()}}
+    # The detailed rows that were printed.
+    events = []
+    starts = [i for i, l in enumerate(lines) if l == "Start" and i + 1 < len(lines) and re.fullmatch(r"\d\d-\d\d-\d{4} \d\d:\d\d", lines[i + 1])]
+    page = re.compile(r"^(\d\d?/\d\d?/\d\d, .*Smart|https://mas\.smartaviation|TIME DETAILS RESOURCES|Showing\s*\d|© \d{4} Smart|[\d ]+$|\d+ (?:year|month|day|week|hour|minute)s? ago$)")
+    for n, i in enumerate(starts):
+        blk = [l for l in lines[i:starts[n + 1] if n + 1 < len(starts) else len(lines)] if not page.match(l)]
+        flat = " ".join(blk)
+        typ = next((t for t in EVENT_TYPES if t in re.sub(r"\s+", " ", flat.upper())), "")
+        ct = re.search(r"Cancellation Type (.+?) Cancellation Reason", flat)
+        # Who cancelled: the line before "2025-09-17 14:52 AEST"; the reason is between "Cancellation Reason" and that name.
+        when = next((k for k, l in enumerate(blk) if re.match(r"\d{4}-\d\d-\d\d \d\d:\d\d A[EC]", l)), -1)
+        byname = blk[when - 1] if when > 0 else ""
+        cr = blk.index("Cancellation Reason") if "Cancellation Reason" in blk else -1
+        reason = " ".join(blk[cr + 1:when - 1]) if 0 <= cr < when - 1 else ""
+        if reason in ("--",) or len(reason) > 300:
+            reason = ""
+        rs = type("R", (), {"group": lambda self, i: reason})()
+        by = type("B", (), {"group": lambda self, i: byname})() if byname else None
+        d = blk[1]
+        events.append({"start": f"{d[6:10]}-{d[3:5]}-{d[0:2]}T{d[11:16]}", "type": typ.title().replace("& De-Briefing", "& De-briefing"), "name": "",
+                       "ctype": full_reason(ct.group(1)) if ct else "", "reason": (rs.group(1).strip() if rs and rs.group(1).strip() != "--" else "")[:300],
+                       "by": by.group(1) if by else "", "instructor": ""})
+    shown = re.search(r"Showing\s*(\d+)\s*to\s*(\d+)\s*of\s*(\d+)\s*results", text)
+    return {"source": "Smart Aviation event cancellation report", "range": rng, "name": who, "summary": summary, "events": events,
+            "shown": [int(shown.group(2)), int(shown.group(3))] if shown else [len(events), total]}
+
+
 # ---------- Smart cancellation report ----------
 
 def cancellations(raw):
@@ -283,6 +343,20 @@ def changes_for(path, mime, name, roster):
                                "confidence": "high", "reason": "ARN on the Aviation 1 in 60 report."})
             return {"summary": f"Aviation 1 in 60 attendance report for {rec['name']}: {value}.", "document_type": "Aviation 1 in 60 attendance report (read without Claude)",
                     "warnings": ["Some rows could not be read: " + "; ".join(check) + ". Check the file."] if check else [], "unmatched": [], "changes": ch}
+        cp = cancellations_pdf(text)
+        if cp:
+            ref = match(roster, cp["name"]) if cp["name"] else ""
+            sm = cp["summary"]
+            value = f"{sm['total']} cancelled events ({sm['flight']} flight, {sm['nonflight']} other), {fmt(cp['range'][0])} to {fmt(cp['range'][1])}"
+            warn = [] if cp["name"] else ["The report does not say which student it is for. Choose who it belongs to."]
+            if cp["shown"][0] < cp["shown"][1]:
+                warn.append(f"The printout lists {cp['shown'][0]} of {cp['shown'][1]} events in detail; the totals by reason and type cover all {cp['shown'][1]}. "
+                            "For every event in detail, export the report as CSV from Smart instead.")
+            return {"summary": f"Smart cancellation report{' for ' + cp['name'] if cp['name'] else ''}: {value}.", "document_type": "Smart Aviation cancellation report, PDF (read without Claude)",
+                    "warnings": warn, "unmatched": [],
+                    "changes": [{"student": ref, "name_in_document": cp["name"] or "Student on this report", "kind": "records", "item": "cancellations", "value": value,
+                                 "data": {"source": cp["source"], "range": cp["range"], "events": cp["events"], "summary": dict(sm, range=cp["range"])},
+                                 "confidence": "high" if ref else "medium", "reason": "Statistics from the Smart event cancellation report."}]}
         ev = smart_events(text)
         if ev:
             n = len(ev["events"])
@@ -358,8 +432,12 @@ def merge_records(old, item, new):
         m = {key(e): e for e in old.get("events", [])}
         m.update({key(e): e for e in new.get("events", [])})
         rs = [r for r in (old.get("range"), new.get("range")) if r and r[0]]
-        return {"source": new.get("source") or old.get("source"), "range": [min(r[0] for r in rs), max(r[1] for r in rs)] if rs else ["", ""],
-                "events": sorted(m.values(), key=lambda e: e["start"])}
+        out = {"source": new.get("source") or old.get("source"), "range": [min(r[0] for r in rs), max(r[1] for r in rs)] if rs else ["", ""],
+               "events": sorted(m.values(), key=lambda e: e["start"])}
+        sums = [x["summary"] for x in (old, new) if x.get("summary")]
+        if sums:  # totals from Smart's own statistics; the widest (then newest) report wins
+            out["summary"] = max(sums, key=lambda x: (x.get("total", 0), (x.get("range") or ["", ""])[1]))
+        return out
     return new
 
 
