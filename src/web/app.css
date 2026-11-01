@@ -1,3 +1,8 @@
+/* Inter, served from this site (SIL OFL 1.1, fonts/OFL-Inter.txt) — no third-party font requests. */
+@font-face{font-family:Inter;src:url(fonts/inter-latin-400-normal.woff2) format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:Inter;src:url(fonts/inter-latin-500-normal.woff2) format("woff2");font-weight:500;font-display:swap}
+@font-face{font-family:Inter;src:url(fonts/inter-latin-600-normal.woff2) format("woff2");font-weight:600;font-display:swap}
+@font-face{font-family:Inter;src:url(fonts/inter-latin-700-normal.woff2) format("woff2");font-weight:700;font-display:swap}
 :root{
   --navy:#0b2a4f;--navy2:#123b6b;--teal:#16627a;--gold:#b8955a;--gold2:#d9bf8c;
   --bg:#f3f5f8;--surface:#fff;--line:#e3e8ef;--line2:#eef2f6;--text:#0f1c2e;--muted:#5b6b80;--faint:#98a4b3;
@@ -489,3 +494,28 @@ kbd{font:600 11px/1 var(--sans);padding:3px 6px;border-radius:6px;background:#ff
 }
 @media(prefers-reduced-motion:reduce){.content.enter,.palette{animation:none}}
 .table td{text-overflow:ellipsis;white-space:nowrap}.table td .who,.table td .prog{white-space:normal}
+
+/* ---- alignment pass: one control height, one rhythm ---- */
+:root{--ctl:36px}
+.toolbar{align-items:center;gap:12px;margin:0 0 14px}
+.chips{padding:0 28px 0 0;gap:8px;align-items:center}
+.chip,.focus button,.sortsel{height:var(--ctl);display:inline-flex;align-items:center;padding:0 14px;margin:0;font-size:13.5px;line-height:1}
+.sortsel{display:block;border-radius:10px;padding:0 30px 0 12px}
+.chip{border-radius:10px}
+.focus{padding:0;margin:0 0 12px;gap:6px}
+.focus button{border-radius:10px}
+.cols{align-items:start}
+.top{min-height:72px}
+.top .sub{margin-left:0}
+.card h2+.sub{margin-top:4px}
+.prow .t small,.li .t small{margin-top:1px}
+.prow>svg.i{color:var(--faint);width:20px;height:20px}
+.hero .meta+.meta{margin-top:0}
+@media(max-width:760px){
+  .toolbar{flex-direction:row;flex-wrap:wrap;gap:8px}
+  .toolbar .chips{flex:1 1 100%;margin:0 -14px;padding:0 28px 0 14px}
+  .focus{margin:0 -14px 10px}
+  .top{min-height:0}
+}
+.hero .meta,.hero h2{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero .head>div:not(.avatar){min-width:0;flex:1}

@@ -389,7 +389,6 @@ function students() {
   const cards = `<div class="cards">${shown.map(r => { const s = r.state, f = figs.get(r.uid); return `<div class="scard" data-open="${r.uid}">${avatar(s.name, 46)}<div class="mid"><b>${esc(s.name || 'Unnamed student')}</b><small>${esc(shortCourse(s.course) + (s.instructor ? ' · ' + s.instructor : ''))}</small><div class="row"><span class="next" style="flex:1">${f.last ? 'Last: ' + esc(f.last) : 'Next: ' + esc(f.next)}</span>${f.attendance >= 0 && f.attendance < 80 ? `<span class="pill red">${pct(f.attendance)} attend.</span>` : ''}${r.dirty ? '<span class="pill amber">Saving</span>' : ''}</div></div>${ring(f.overall, 52)}</div>`; }).join('')}</div>`;
   const empty = !Store.ready || (!all.length && Store.status !== 'Live') ? `<div class="empty">${icon('people')}Loading students…</div>` : !rows.length ? `<div class="empty">${icon('search')}No students match.</div>` : '';
   const actions = `<label class="search">${icon('search')}<input id="q" type="search" placeholder="Search name, ID or instructor" value="${esc(ui.query)}" aria-label="Search students"></label>
-    <button class="icon-btn" id="searchBtn" aria-label="Search" style="${ui.searching ? 'display:none' : ''}">${icon('search')}</button>
     <button class="btn gold fab" id="newBtn">${icon('add')}<span>New student</span></button>`;
   const sortSel = `<select id="sort" class="sortsel" aria-label="Sort students"><option value="name">Sort: Name</option><option value="updated">Sort: Recently updated</option><option value="progress">Sort: Progress</option><option value="attendance">Sort: Lowest attendance</option><option value="flight">Sort: Last flight</option></select>`;
   app.innerHTML = frame('<h1>Students</h1>', `${rows.length}${rows.length !== all.length ? ' of ' + all.length : ''} students`, actions,
@@ -397,7 +396,7 @@ function students() {
   $('#sort').value = ui.sort;
   const qi = $('#q');
   qi.oninput = () => { ui.query = qi.value; ui.limit = 150; const pos = qi.selectionStart; students(); const n = $('#q'); n.focus(); n.setSelectionRange(pos, pos); };
-  $('#searchBtn').onclick = () => { ui.searching = true; students(); $('#q').focus(); };
+
   const mq = $('#mq');
   mq.oninput = () => { ui.query = mq.value; ui.limit = 150; const pos = mq.selectionStart; students(); const n = $('#mq'); n.focus(); n.setSelectionRange(pos, pos); };
   app.querySelector('.focus').onclick = e => { const b = e.target.closest('[data-focus]'); if (b) { ui.focus = b.dataset.focus; ui.limit = 150; students(); } };
@@ -430,9 +429,9 @@ function studentPage(uid, tab) {
   document.title = (s.name || 'Student') + ' · CPL Tracker';
   const tabs = [['overview', 'Overview'], ['lessons', 'Lessons'], ['exams', 'Exams'], ['attendance', 'Attendance'], ['flights', 'Flights']];
   const low = f.attendance >= 0 && f.attendance < 80;
-  const hero = `<section class="hero"><div class="head">${avatar(s.name, 64)}<div style="min-width:0"><h2>${esc(s.name || 'Unnamed student')}</h2><div class="meta">${esc([shortCourse(s.course), s.studentId && 'ID ' + s.studentId].filter(Boolean).join(' · '))}</div>${s.instructor ? `<div class="meta">Instructor ${esc(s.instructor)}</div>` : ''}</div>
+  const hero = `<section class="hero"><div class="head">${avatar(s.name, 64)}<div style="min-width:0"><h2>${esc(s.name || 'Unnamed student')}</h2><div class="meta">${esc(shortCourse(s.course))}</div><div class="meta">${esc([s.studentId && 'ID ' + s.studentId, s.instructor && 'Instructor ' + s.instructor].filter(Boolean).join(' · '))}</div></div>
     <div style="margin-left:auto">${ring(f.overall, 76, '#d9bf8c', '#ffffff30')}</div></div>
-    <div class="tiles"><div class="tile"><b>${pct(f.practical)}</b><small>Practical</small></div><div class="tile"><b>${pct(f.theory)}</b><small>Theory</small></div><div class="tile ${low ? 'warn' : ''}"><b>${f.attendance < 0 ? '—' : pct(f.attendance)}</b><small>Attendance</small></div><div class="tile"><b>${f.hours.toFixed(0)}</b><small>Hours flown</small></div></div></section>
+    <div class="tiles"><div class="tile"><b>${pct(f.practical)}</b><small>Practical</small></div><div class="tile"><b>${pct(f.theory)}</b><small>Theory</small></div><div class="tile ${low ? 'warn' : ''}"><b>${f.attendance < 0 ? '—' : pct(f.attendance)}</b><small>Attendance</small></div><div class="tile"><b>${f.hours.toFixed(0)}</b><small>Hours</small></div></div></section>
     <nav class="tabs">${tabs.map(([k, l]) => `<a href="#/student/${uid}/${k}" class="${k === tab ? 'on' : ''}">${l}</a>`).join('')}</nav>`;
   const body = tab === 'lessons' ? lessonsTab(s) : tab === 'exams' ? examsTab(s) : tab === 'attendance' ? attendanceTab(s, f) : tab === 'flights' ? flightsTab(s) : overviewTab(r, s, f);
   app.innerHTML = frame(`<button class="icon-btn" onclick="history.length>1?history.back():location.hash='#/students'" aria-label="Back" style="margin-left:-8px">${icon('back')}</button><h1>${esc(s.name || 'Student')}</h1>`, r.dirty ? 'Saving…' : 'Updated ' + ago(r.updated) + (r.by ? ' by ' + esc(r.by) : ''), `<button class="btn ghost" id="editBtn" title="Edit details">${icon('edit')}<span class="wide">Edit</span></button><button class="btn ghost" id="reportBtn" title="Attendance and progress report (PDF)">${icon('report')}<span class="wide">Report</span></button>${Store.meta.role === 'admin' ? `<button class="icon-btn" id="delBtn" aria-label="Remove student" title="Remove student">${icon('delete')}</button>` : ''}`, hero + body);
@@ -458,13 +457,16 @@ function overviewTab(r, s, f) {
   const nextId = ORDER.find(id => f.next.startsWith(id + '. '));
   const meter = (l, v, c) => `<div class="meter"><div class="t"><span>${l}</span><b>${pct(v)}</b></div>${bar(v, c)}</div>`;
   const ms = MILESTONES.map(m => { const x = milestone(s, m); return `<div class="ms" data-ms="${m}"><div class="t"><b>After ${esc(label(String(m)))}</b><small>Allowance ${hrs(x.planned)}${x.accrued === null ? ' · hours not entered' : ' · flown ' + hrs(x.accrued)}</small></div>${x.accrued === null ? '' : x.overfly > 0 ? `<span class="pill amber">+${hrs(x.overfly)} · ${money(x.cost)}</span>` : '<span class="pill green">Within allowance</span>'}${icon('chevron')}</div>`; }).join('');
-  return `<div class="grid g2">
+  return `<div class="grid g2 cols">
+   <div class="grid">
    <div class="card"><h2>Course progress</h2><div class="sub">${share.toFixed(0)}% practical + ${(100 - share).toFixed(0)}% theory</div>${meter('Overall', f.overall, '#0b2a4f')}${meter('Practical · ' + f.done + ' of ' + ORDER.length + ' lessons', f.practical, '#16627a')}${meter('Theory · exams passed', f.theory, '#b8955a')}</div>
+   <div class="card"><h2>Hour reviews</h2><div class="sub">Aircraft hours at each milestone against the syllabus allowance. Overfly is estimated at $500/h.</div><div style="margin-top:6px">${ms}</div></div>
+   </div>
    <div class="grid">${f.last ? `<div class="card nextcard" data-gotab="flights">${icon('flight')}<div style="flex:1;min-width:0"><div class="label">Last flown · ${auDate(f.lastDate)}</div><b style="font-size:17px">${esc(f.last)}</b><div class="muted" style="font-size:13px">${f.flights} flights · ${hrs(f.hours)} in total</div></div>${icon('chevron')}</div>` : ''}
    ${f.next ? '' : '<!--'}<div class="card nextcard" data-gotab="lessons">${icon('school')}<div style="flex:1;min-width:0"><div class="label">Next lesson</div><b style="font-size:17px">${esc(f.next)}</b>${nextId ? `<div class="muted" style="font-size:13px">${esc(LESSONS[nextId].duration + ' · ' + LESSONS[nextId].mode)}</div>` : ''}${f.gaps ? `<div style="font-size:13px;color:var(--amber);font-weight:600;margin-top:2px">${f.gaps} earlier lesson${f.gaps > 1 ? 's' : ''} not marked complete</div>` : ''}</div>${icon('chevron')}</div>${f.next ? '' : '-->'}
-   ${f.flights ? `<div class="card"><h2>Flying</h2><div class="minis"><div><b>${f.flights}</b><small>Flights</small></div><div><b>${hrs(f.hours)}</b><small>Total</small></div><div><b>${hrs(f.solo)}</b><small>Solo</small></div><div><b>${hrs(f.ifr)}</b><small>Instrument</small></div></div><div class="kv" style="margin-top:10px;border-top:1px solid var(--line2)"><span>Last flight</span><b>${auDate(f.lastFlight)}</b></div></div>` : ''}</div>
-   <div class="card"><h2>Hour reviews</h2><div class="sub">Aircraft hours at each milestone against the syllabus allowance. Overfly is estimated at $500/h.</div><div style="margin-top:6px">${ms}</div></div>
+   ${f.flights ? `<div class="card"><h2>Flying</h2><div class="minis"><div><b>${f.flights}</b><small>Flights</small></div><div><b>${hrs(f.hours)}</b><small>Total</small></div><div><b>${hrs(f.solo)}</b><small>Solo</small></div><div><b>${hrs(f.ifr)}</b><small>Instrument</small></div></div><div class="kv" style="margin-top:10px;border-top:1px solid var(--line2)"><span>Last flight</span><b>${auDate(f.lastFlight)}</b></div></div>` : ''}
    <div class="card"><h2>Details</h2><div style="margin-top:8px">${[['Student ID / ARN', s.studentId], ['Course', s.course], ['Instructor', s.instructor], ['Course start', auDate(s.start)], ['Last updated', ago(r.updated) + (r.by ? ' by ' + r.by : '')]].map(([k, v]) => `<div class="kv"><span>${k}</span><b>${esc(v || '—')}</b></div>`).join('')}</div></div>
+   </div>
   </div>`;
 }
 
@@ -610,7 +612,7 @@ function overview() {
   low.sort((a, b) => a[1] - b[1]); over.sort((a, b) => b[1] - a[1]);
   const recent = all.slice().sort((a, b) => (b.updated || 0) - (a.updated || 0)).slice(0, 6).map(r => [r, r]);
   const h = new Date().getHours(), first = (Store.meta.user || '').split(' ')[0];
-  const sect = (title, sub, rows, fmt, cls) => `<div class="card"><div style="display:flex;align-items:center;gap:8px"><h2 style="flex:1">${title}</h2>${rows.length && cls ? `<span class="pill ${cls}">${rows.length}</span>` : ''}</div>${sub ? `<div class="sub">${sub}</div>` : ''}<div style="margin-top:8px">${rows.length ? rows.slice(0, 6).map(([r, v]) => `<div class="prow" data-open="${r.uid}">${avatar(r.state.name, 36)}<div class="t"><b>${esc(r.state.name)}</b><small>${esc(shortCourse(r.state.course) + (!cls && r.by ? ' · by ' + r.by : ''))}</small></div><span class="pill ${cls || ''}">${fmt(v)}</span></div>`).join('') : '<div class="muted" style="padding:8px 0">Nothing to show.</div>'}</div></div>`;
+  const sect = (title, sub, rows, fmt, cls) => `<div class="card"><div style="display:flex;align-items:center;gap:8px"><h2 style="flex:1">${title}</h2>${rows.length && cls ? `<span class="pill ${cls}">${rows.length}</span>` : ''}</div>${sub ? `<div class="sub">${sub}</div>` : ''}<div style="margin-top:8px">${rows.length ? rows.slice(0, 6).map(([r, v]) => `<div class="prow" data-open="${r.uid}">${avatar(r.state.name, 36)}<div class="t"><b>${esc(r.state.name)}</b><small>${esc(cls ? shortCourse(r.state.course) : 'Updated ' + fmt(v) + (r.by ? ' by ' + r.by : ''))}</small></div>${cls ? `<span class="pill ${cls}">${fmt(v)}</span>` : icon('chevron')}</div>`).join('') : '<div class="muted" style="padding:8px 0">Nothing to show.</div>'}</div></div>`;
   const cs = [...courses].sort((a, b) => b[1] - a[1]).slice(0, 8), max = cs.length ? cs[0][1] : 1;
   app.innerHTML = frame('<h1>Overview</h1>', 'Across all students', '', `
    <section class="welcome"><h2>${h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'}${first ? ', ' + esc(first) : ''}</h2><p>Here’s where the school stands today.</p>
