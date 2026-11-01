@@ -1,6 +1,6 @@
 {
- "versionCode": 14,
- "versionName": "2.2.2",
+ "versionCode": 15,
+ "versionName": "2.3.0",
  "apk": "CPLTracker.apk",
- "notes": "Attendance now uses hours against 20 h a week from the Aviation 1 in 60 record (as in the report). Students without a record show \u2014 instead of 100%."
+ "notes": "People: administrators can add people and give out access codes from the app (Account, People)."
 }
