@@ -13,7 +13,8 @@ const pct = v => (v >= 10 || v === 0 ? v.toFixed(0) : v.toFixed(1)) + '%';
 const hrs = v => (v || 0).toFixed(1) + ' h';
 const money = v => '$' + Math.round(v).toLocaleString('en-AU');
 const newId = () => crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
-const SERVER = 'https://179-237-123-196.sslip.io';
+const SERVER = 'https://coursetracker.online';
+const OLD_SERVER = 'https://179-237-123-196.sslip.io'; // still answers; saved sign-ins move to the new address
 const SICK = 'Sick (certificate)';
 
 const ICON = {
@@ -129,7 +130,7 @@ function prepare(x) {
 
 // ---------- the shared database ----------
 const Store = {
-  meta: (() => { try { return JSON.parse(localStorage.getItem('mas-cpl-web') || 'null') || {}; } catch (e) { return {}; } })(),
+  meta: (() => { try { const m = JSON.parse(localStorage.getItem('mas-cpl-web') || 'null') || {}; if (m.url === OLD_SERVER) m.url = SERVER; return m; } catch (e) { return {}; } })(),
   recs: new Map(), listeners: new Set(), status: 'Offline', lastSync: 0, ready: false, gen: 0, fails: 0, db: null, writes: new Set(), pushing: false,
   signedIn() { return !!this.meta.code; },
   saveMeta() { try { localStorage.setItem('mas-cpl-web', JSON.stringify(this.meta)); } catch (e) { } },

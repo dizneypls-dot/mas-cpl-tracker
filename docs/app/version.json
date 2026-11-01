@@ -1,6 +1,6 @@
 {
- "versionCode": 12,
- "versionName": "2.2.0",
+ "versionCode": 13,
+ "versionName": "2.2.1",
  "apk": "CPLTracker.apk",
- "notes": "Attendance and progress report: open a student and tap the report button, then Save PDF."
+ "notes": "Now at coursetracker.online. Attendance and progress report: open a student and tap the report button."
 }

@@ -37,7 +37,7 @@ checks every 15 minutes. Publishing = push to `main` (GitHub Pages).
 
 ## Server (deployed 2026-10-31)
 
-`https://179-237-123-196.sslip.io` on the spare Infomaniak VPS (`ssh aurisse-mail`): `/opt/cpl-tracker/cpl_server.py`
+`https://coursetracker.online` (website + `/api`; the old `https://179-237-123-196.sslip.io` still answers) on the spare Infomaniak VPS (`ssh aurisse-mail`): `/opt/cpl-tracker/cpl_server.py`
 as systemd `cpl-tracker` (user `cpltracker`, data `/var/lib/cpl-tracker`, daily backups in `backups/`, 30 days),
 Caddy for HTTPS. Access codes: `cpl-users add "Name"` / `cpl-users add "Name" --role admin` / `cpl-users list` /
 `cpl-users remove "Name"`.

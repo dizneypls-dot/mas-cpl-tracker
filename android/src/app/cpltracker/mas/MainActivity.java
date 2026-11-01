@@ -39,7 +39,7 @@ import org.json.JSONObject;
 
 // Home of the app: students list, overview dashboard, uploads and account, with a bottom navigation bar.
 public class MainActivity extends Activity implements Store.Listener {
-    static final String WEBSITE = "https://dizneypls-dot.github.io/mas-cpl-tracker/";
+    static final String WEBSITE = "https://coursetracker.online/";
     private Store store;
     private FrameLayout content;
     private LinearLayout nav;

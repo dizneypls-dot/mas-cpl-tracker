@@ -35,7 +35,8 @@ import org.json.JSONObject;
 // changes are sent at once, and changes from other devices arrive within seconds (long polling).
 // When two people edit the same student, changes are merged lesson by lesson.
 final class Store {
-    static final String DEFAULT_SERVER = "https://179-237-123-196.sslip.io";
+    static final String DEFAULT_SERVER = "https://coursetracker.online";
+    static final String OLD_SERVER = "https://179-237-123-196.sslip.io"; // still answers; saved sign-ins move to the new address
 
     static final class Rec {
         String uid, by = "";
@@ -79,7 +80,7 @@ final class Store {
     String user() { return prefs.getString("user", ""); }
     String role() { return prefs.getString("role", ""); }
     boolean admin() { return "admin".equals(role()); }
-    String server() { return prefs.getString("url", DEFAULT_SERVER); }
+    String server() { String u = prefs.getString("url", DEFAULT_SERVER); return OLD_SERVER.equals(u) ? DEFAULT_SERVER : u; }
 
     interface Done { void done(String error); }
 
