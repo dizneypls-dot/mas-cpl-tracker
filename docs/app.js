@@ -16,6 +16,10 @@ const fig = v => esc(String(v)).replace(/^([$\d.,+−-]+)\s?(%|h)$/, '$1<span cl
 const money = v => '$' + Math.round(v).toLocaleString('en-AU');
 const newId = () => crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
 const SERVER = 'https://coursetracker.online';
+// Inside the Android app the same screens run in a WebView; CPLApp is its bridge (sign-in hand-over,
+// Save PDF through Android's print service, app updates). On the website it is undefined.
+const APP = typeof window.CPLApp === 'object' && window.CPLApp ? window.CPLApp : null;
+if (APP) document.documentElement.classList.add('in-app');
 const OLD_SERVER = 'https://179-237-123-196.sslip.io'; // still answers; saved sign-ins move to the new address
 const SICK = 'Sick (certificate)';
 
@@ -141,7 +145,7 @@ function prepare(x) {
 
 // ---------- the shared database ----------
 const Store = {
-  meta: (() => { try { const m = JSON.parse(localStorage.getItem('mas-cpl-web') || 'null') || {}; if (m.url === OLD_SERVER) m.url = SERVER; return m; } catch (e) { return {}; } })(),
+  meta: (() => { try { let m = JSON.parse(localStorage.getItem('mas-cpl-web') || 'null') || {}; if (!m.code && APP) { try { const a = JSON.parse(APP.signIn() || 'null'); if (a && a.code) m = {code: a.code, url: SERVER, user: a.user || '', role: a.role || 'instructor', rev: 0}; } catch (e) { } } if (m.url === OLD_SERVER) m.url = SERVER; return m; } catch (e) { return {}; } })(),
   recs: new Map(), listeners: new Set(), status: 'Offline', lastSync: 0, ready: false, gen: 0, fails: 0, db: null, writes: new Set(), pushing: false,
   signedIn() { return !!this.meta.code; },
   saveMeta() { try { localStorage.setItem('mas-cpl-web', JSON.stringify(this.meta)); } catch (e) { } },
@@ -253,11 +257,13 @@ const Store = {
   async signIn(code, url) {
     const me = await this.api('GET', '/api/me', null, code, url);
     this.meta = {code, url, user: me.name, role: me.role, rev: 0};
+    if (APP) try { APP.signedIn(JSON.stringify({code, user: me.name, role: me.role})); } catch (e) { }
     this.saveMeta();
     this.loop();
   },
   async signOut() {
     this.gen++; this.meta = {}; this.saveMeta(); this.recs.clear();
+    if (APP) try { APP.signedOut(); } catch (e) { }
     if (this.db) await new Promise(res => { const tx = this.db.transaction('students', 'readwrite'); tx.objectStore('students').clear(); tx.oncomplete = res; tx.onerror = res; });
     this.emit();
   },
@@ -355,7 +361,7 @@ function login() {
   <form class="card" id="loginForm"><h2>Sign in</h2><p class="muted" style="margin:4px 0 16px;color:var(--muted)">Enter the personal access code from your administrator.</p>
   <label class="field"><span>Access code</span><input id="code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX" style="letter-spacing:.08em"></label>
   <div class="err" id="err" hidden></div><button class="btn primary" style="width:100%" id="go">Sign in</button></form>
-  ${iosInstall()}<div class="foot">Moorabbin Aviation Services · Australian National Airline College<br><a href="app/CPLTracker.apk" style="color:#ffffffc0">Get the Android app</a></div></div></div>`;
+  ${iosInstall()}<div class="foot">Moorabbin Aviation Services · Australian National Airline College${APP ? '' : '<br><a href="app/CPLTracker.apk" style="color:#ffffffc0">Get the Android app</a>'}</div></div></div>`;
   let url = Store.meta.url || SERVER;
   $('#loginForm').onsubmit = async e => {
     e.preventDefault();
@@ -621,7 +627,7 @@ function reportPage(uid) {
   const upd = () => { o.from = $('#rFrom').value || undefined; o.to = $('#rTo').value || undefined; if (o.from && o.to && o.from > o.to) return toast('“From” must be before “To”.'); o.progress = $('#rProg').checked; reportPage(uid); };
   $('#rFrom').onchange = upd; $('#rTo').onchange = upd; $('#rProg').onchange = upd;
   $('#classicBtn').onclick = () => openClassic(uid);
-  $('#printBtn').onclick = () => { let p = document.getElementById('reportPrint'); if (!p) { p = document.createElement('div'); p.id = 'reportPrint'; document.body.append(p); } p.innerHTML = rep.html; document.title = rep.file; setTimeout(() => window.print(), 50); };
+  $('#printBtn').onclick = () => { let p = document.getElementById('reportPrint'); if (!p) { p = document.createElement('div'); p.id = 'reportPrint'; document.body.append(p); } p.innerHTML = rep.html; document.title = rep.file; setTimeout(() => APP ? APP.print(rep.file) : window.print(), 50); };
   const fit = () => { const w = $('.rwrap'), sc = $('.rscale'); if (!w || !sc) return; const k = Math.min(1, w.clientWidth / sc.scrollWidth); sc.style.transform = k < 1 ? `scale(${k})` : ''; w.style.height = k < 1 ? sc.scrollHeight * k + 'px' : ''; };
   requestAnimationFrame(fit); window.onresize = fit;
 }
@@ -713,6 +719,10 @@ async function routeUpload(list) {
   }
   if (local.length) importer.upload(local);
 }
+
+window.cplShared = (name, mime, b64) => {
+  try { const bin = atob(b64), a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); go('uploads'); setTimeout(() => routeUpload([new File([a], name, {type: mime})]), 300); return true; } catch (e) { toast('Could not open the shared file.'); return false; }
+};
 
 // ---------- Claude scans ----------
 const MIME = {png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', pdf: 'application/pdf', csv: 'text/csv', txt: 'text/plain', tsv: 'text/tab-separated-values', json: 'application/json', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'};
@@ -815,11 +825,12 @@ function account() {
    <div class="card"><div style="display:flex;align-items:center;gap:14px">${avatar(Store.meta.user, 56)}<div><b style="font-size:19px">${esc(Store.meta.user || '')}</b><div style="margin-top:4px"><span class="pill navy">${Store.meta.role === 'admin' ? 'Administrator' : 'Instructor'}</span></div></div></div></div>
    <div class="card"><h2>Shared database</h2><div style="display:flex;align-items:center;gap:10px;margin:10px 0 4px"><span class="pill ${live ? 'green' : 'amber'}">${live ? 'LIVE' : 'OFFLINE'}</span><span class="muted" style="font-size:13.5px">${live ? 'Changes appear on every device within seconds.' : esc(Store.status)}</span></div>
     ${[['Students', Store.all().length], ['Waiting to save', Store.pending()], ['Last update', Store.lastSync ? ago(Store.lastSync) : '—'], ['Server', (Store.meta.url || SERVER).replace('https://', '')]].map(([k, v]) => `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>`).join('')}</div>
-   <div class="card"><h2>More</h2><div style="display:grid;gap:10px;margin-top:12px"><a class="btn" href="app/CPLTracker.apk">${icon('android')}<span>Get the Android app</span></a><a class="btn" href="classic/" target="_blank" rel="noopener">${icon('report')}<span>Classic tracker · reports, Excel, email</span></a><button class="btn danger" id="out">${icon('logout')}<span>Sign out</span></button></div></div>
+   <div class="card"><h2>More</h2><div style="display:grid;gap:10px;margin-top:12px">${APP ? `<button class="btn" id="upd">${icon('sync')}<span>Check for app updates · ${esc(APP.version())}</span></button>` : `<a class="btn" href="app/CPLTracker.apk">${icon('android')}<span>Get the Android app</span></a>`}<a class="btn" href="classic/" target="_blank" rel="noopener">${icon('report')}<span>Classic tracker · reports, Excel, email</span></a><button class="btn danger" id="out">${icon('logout')}<span>Sign out</span></button></div></div>
    ${iosInstall() ? `<div class="card">${iosInstall()}</div>` : ''}
    ${Store.meta.role === 'admin' ? `<div class="card" style="grid-column:1/-1"><div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:220px"><h2>People</h2><div class="sub">Everyone who can sign in. Each person gets their own access code, which works on the website (${esc(location.host || 'coursetracker.online')}) and in the app, from anywhere.</div></div><button class="btn primary" id="addUser">${icon('add')}<span>Add a person</span></button></div><div id="people" class="list" style="margin-top:12px"><div class="muted">Loading…</div></div></div>` : ''}
   </div>`);
   if (Store.meta.role === 'admin') People.load(Date.now() - People.at < 60000 ? People.items : null);
+  if ($('#upd')) $('#upd').onclick = () => APP.checkUpdate();
   $('#out').onclick = async () => { if (!confirm(Store.pending() ? Store.pending() + ' change(s) have not reached the server and will be lost. Sign out?' : 'Sign out of this computer?')) return; await Store.signOut(); render(); };
 }
 
