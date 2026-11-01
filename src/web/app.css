@@ -595,3 +595,7 @@ svg.i{fill:none}
 .wbars{overflow:hidden}.wb{min-width:0}
 @media(max-width:760px){.wb small{visibility:hidden}.wb:nth-child(3n+2) small{visibility:visible;overflow:visible}.wb small{font-size:10px}}
 @media(max-width:760px){.top .btn.ghost,.top .icon-btn{color:#fff}.top .btn.ghost:hover{color:#fff;background:#ffffff1a}}
+/* inputs always use the text colour, never the white of the sign-in screen around them */
+.login .card,.field input,.field select,.field textarea,.search input,.palette input{color:var(--text)}
+.login .card .field input::placeholder{color:#9aa6b5}
+.login .card .field input{caret-color:var(--navy);font-weight:600}
