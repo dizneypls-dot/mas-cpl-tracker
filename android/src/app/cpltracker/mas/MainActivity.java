@@ -74,6 +74,7 @@ public class MainActivity extends Activity {
         if (b != null) web.restoreState(b);
         else web.loadUrl(SITE);
         takeShare(getIntent());
+        try { Diag.sendPending(this); } catch (Throwable ignored) { }
         Updater.check(this, false);
     }
 
@@ -91,10 +92,14 @@ public class MainActivity extends Activity {
 
     // ---------- the website, with an offline copy ----------
 
+    // Never fails: if Android will not say, assume online and let the website load normally.
     private boolean online() {
-        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo n = cm == null ? null : cm.getActiveNetworkInfo();
-        return n != null && n.isConnected();
+        try {
+            ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm == null) return true;
+            NetworkInfo n = cm.getActiveNetworkInfo();
+            return n != null && n.isConnected();
+        } catch (Throwable t) { return true; }
     }
 
     private final class Client extends WebViewClient {
@@ -111,6 +116,10 @@ public class MainActivity extends Activity {
         // records saved on the phone stay available). The shared database itself (/api) always needs a connection.
         @Override
         public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
+            try { return offlineCopy(r); } catch (Throwable t) { return null; }
+        }
+
+        private WebResourceResponse offlineCopy(WebResourceRequest r) {
             Uri u = r.getUrl();
             if (!HOST.equals(u.getHost()) || !"GET".equals(r.getMethod())) return null;
             String path = u.getPath() == null ? "/" : u.getPath();
