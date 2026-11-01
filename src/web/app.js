@@ -303,7 +303,15 @@ const segValue = (el, name) => el.querySelector(`[data-seg="${name}"] .on`)?.dat
 
 // ---------- app frame ----------
 const app = $('#app');
-const ui = {query: '', course: '', sort: 'name', limit: 150, lessonFilter: 'all', searching: false};
+const ui = {query: '', course: '', focus: '', sort: 'name', limit: 150, lessonFilter: 'all', searching: false};
+// Quick filters for the students that need someone to act.
+const FOCUS = [
+  ['', 'Everyone', () => true],
+  ['attention', 'Needs attention', (s, f) => (f.attendance >= 0 && f.attendance < 80) || f.overHours >= 1000],
+  ['attendance', 'Low attendance', (s, f) => f.attendance >= 0 && f.attendance < 80],
+  ['hours', 'Over syllabus hours', (s, f) => f.overHours > 0],
+  ['idle', 'Not flown in 30 days', (s, f) => f.lastFlight && f.lastFlight < new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10) && f.lastFlight >= new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10)],
+];
 const route = () => { const h = location.hash.replace(/^#\/?/, '').split('/'); return {page: h[0] || 'students', uid: h[1], tab: h[2] || 'overview'}; };
 const go = h => { if (location.hash !== '#/' + h) location.hash = '#/' + h; else render(); };
 
@@ -312,7 +320,7 @@ function frame(title, sub, actions, content) {
   const nav = [['students', 'Students', 'people'], ['overview', 'Overview', 'dashboard'], ['uploads', 'Uploads', 'upload'], ['account', 'Account', 'person']];
   const live = Store.status === 'Live';
   return `<div class="shell"><aside class="side"><div class="brand"><img src="logos/mas.png" alt="Moorabbin Aviation Services"><span class="sep"></span><img src="logos/anac.png" alt="Australian National Airline College"></div>
-  <div class="kicker">CPL Progress Tracker</div><nav>${nav.map(([k, l, i]) => `<a href="#/${k}" class="${(r.page === k || (k === 'students' && r.page === 'student') || (k === 'uploads' && r.page === 'scan')) ? 'on' : ''}">${icon(i)}<span>${l}</span></a>`).join('')}</nav><div class="grow"></div>
+  <div class="kicker">CPL Progress Tracker</div><button class="qs" onclick="Palette.open()">${icon('search')}<span>Quick search</span><kbd>${/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl'} K</kbd></button><nav>${nav.map(([k, l, i]) => `<a href="#/${k}" class="${(r.page === k || (k === 'students' && r.page === 'student') || (k === 'uploads' && r.page === 'scan')) ? 'on' : ''}">${icon(i)}<span>${l}</span></a>`).join('')}</nav><div class="grow"></div>
   <div class="me">${avatar(Store.meta.user, 36)}<div><b>${esc(Store.meta.user || '')}</b><small>${live ? '● Live' : esc(Store.status)}</small></div></div></aside>
   <div class="main"><header class="top ${ui.searching ? 'searching' : ''}">${title}${sub ? `<span class="sub">${sub}</span>` : ''}${actions || ''}</header><main class="content" id="content">${content}</main></div></div>
   <nav class="mnav">${nav.map(([k, l, i]) => `<a href="#/${k}" class="${(r.page === k || (k === 'students' && r.page === 'student') || (k === 'uploads' && r.page === 'scan')) ? 'on' : ''}"><span>${icon(i)}</span>${l}</a>`).join('')}</nav>`;
@@ -330,7 +338,7 @@ function render() {
   else if (r.page === 'report') reportPage(r.uid);
   else if (r.page === 'account') account();
   else students();
-  if (same) window.scrollTo(0, y); else window.scrollTo(0, 0);
+  if (same) window.scrollTo(0, y); else { window.scrollTo(0, 0); const c = $('#content'); if (c) { c.classList.remove('enter'); void c.offsetWidth; c.classList.add('enter'); } }
 }
 
 // ---------- sign in ----------
@@ -364,15 +372,20 @@ function students() {
   const ck = r => r.state.course || '__none__';
   for (const r of all) courses.set(ck(r), (courses.get(ck(r)) || 0) + 1);
   const q = norm(ui.query);
-  let rows = all.filter(r => (!ui.course || ck(r) === ui.course) && (!q || norm([r.state.name, r.state.studentId, r.state.instructor, r.state.course].join(' ')).includes(q)));
-  const figs = new Map(rows.map(r => [r.uid, figures(r.state)]));
+  const allFigs = new Map(all.map(r => [r.uid, figures(r.state)]));
+  for (const r of all) { const f = allFigs.get(r.uid); f.overHours = 0; for (const m of MILESTONES) { const x = milestone(r.state, m); if (x.cost) f.overHours = Math.max(f.overHours, x.cost); } }
+  const focusFn = (FOCUS.find(x => x[0] === ui.focus) || FOCUS[0])[2];
+  let rows = all.filter(r => (!ui.course || ck(r) === ui.course) && focusFn(r.state, allFigs.get(r.uid)) && (!q || norm([r.state.name, r.state.studentId, r.state.instructor, r.state.course].join(' ')).includes(q)));
+  const figs = allFigs;
+  const focusCount = k => all.filter(r => (!ui.course || ck(r) === ui.course) && FOCUS.find(x => x[0] === k)[2](r.state, allFigs.get(r.uid))).length;
   const by = {name: (a, b) => (a.state.name || '~').localeCompare(b.state.name || '~'), updated: (a, b) => (b.updated || 0) - (a.updated || 0), progress: (a, b) => figs.get(b.uid).overall - figs.get(a.uid).overall,
     attendance: (a, b) => { const x = figs.get(a.uid).attendance, y = figs.get(b.uid).attendance; return (x < 0 ? 999 : x) - (y < 0 ? 999 : y); }, flight: (a, b) => figs.get(b.uid).lastFlight.localeCompare(figs.get(a.uid).lastFlight)};
   rows.sort(by[ui.sort] || by.name);
   const shown = rows.slice(0, ui.limit);
   const chips = `<div class="chips"><button class="chip ${ui.course ? '' : 'on'}" data-course="">All<small>${all.length}</small></button>${[...courses].sort((a, b) => b[1] - a[1]).map(([c, n]) => `<button class="chip ${c === ui.course ? 'on' : ''}" data-course="${esc(c)}">${esc(shortCourse(c === '__none__' ? '' : c))}<small>${n}</small></button>`).join('')}</div>`;
   const st = Store.status === 'Live' ? (Store.pending() ? `Saving ${Store.pending()} change${Store.pending() > 1 ? 's' : ''}…` : '') : Store.status;
-  const table = `<table class="table"><thead><tr><th>Student</th><th class="c-course">Course</th><th>Progress</th><th>Last flown</th><th>Next lesson</th><th>Attendance</th></tr></thead><tbody>${shown.map(r => { const s = r.state, f = figs.get(r.uid); return `<tr data-open="${r.uid}"><td><div class="who">${avatar(s.name, 38)}<div style="min-width:0"><b>${esc(s.name || 'Unnamed student')}</b><small>${esc([s.studentId && 'ID ' + s.studentId, s.instructor].filter(Boolean).join(' · ') || '—')}</small></div></div></td><td class="c-course"><span class="muted">${esc(shortCourse(s.course))}</span></td><td><div class="prog">${bar(f.overall, tone(f.overall))}<b>${pct(f.overall)}</b></div></td><td>${f.last ? `<div class="lastf"><b>${esc(f.last)}</b><small>${auDate(f.lastDate)}</small></div>` : '<span class="muted">—</span>'}</td><td><div class="next">${f.next ? esc(f.next) : '<span class="muted">—</span>'}</div></td><td>${f.attendance < 0 ? '<span class="muted">—</span>' : `<span class="pill ${f.attendance < 80 ? 'red' : 'green'}">${pct(f.attendance)}</span>`}</td></tr>`; }).join('')}</tbody></table>`;
+  const focus = `<div class="focus" role="tablist" aria-label="Quick filters">${FOCUS.map(([k, l]) => `<button role="tab" aria-selected="${k === ui.focus}" class="${k === ui.focus ? 'on' : ''} ${k === 'attention' ? 'warn' : ''}" data-focus="${k}">${l}${k ? `<small>${focusCount(k)}</small>` : ''}</button>`).join('')}</div>`;
+  const table = `<div class="tablewrap"><table class="table"><thead><tr><th>Student</th><th class="c-course">Course</th><th>Progress</th><th>Last flown</th><th>Next lesson</th><th>Attendance</th></tr></thead><tbody>${shown.map(r => { const s = r.state, f = figs.get(r.uid); return `<tr data-open="${r.uid}"><td><div class="who">${avatar(s.name, 38)}<div style="min-width:0"><b>${esc(s.name || 'Unnamed student')}</b><small>${esc([s.studentId && 'ID ' + s.studentId, s.instructor].filter(Boolean).join(' · ') || '—')}</small></div></div></td><td class="c-course"><span class="muted">${esc(shortCourse(s.course))}</span></td><td><div class="prog">${bar(f.overall, tone(f.overall))}<b>${pct(f.overall)}</b></div></td><td>${f.last ? `<div class="lastf"><b>${esc(f.last)}</b><small>${auDate(f.lastDate)}</small></div>` : '<span class="muted">—</span>'}</td><td><div class="next">${f.next ? esc(f.next) : '<span class="muted">—</span>'}</div></td><td>${f.attendance < 0 ? '<span class="muted" title="No attendance record yet">—</span>' : `<span class="pill dotted ${f.attendance < 80 ? 'red' : 'green'}">${pct(f.attendance)}</span>`}</td></tr>`; }).join('')}</tbody></table></div>`;
   const cards = `<div class="cards">${shown.map(r => { const s = r.state, f = figs.get(r.uid); return `<div class="scard" data-open="${r.uid}">${avatar(s.name, 46)}<div class="mid"><b>${esc(s.name || 'Unnamed student')}</b><small>${esc(shortCourse(s.course) + (s.instructor ? ' · ' + s.instructor : ''))}</small><div class="row"><span class="next" style="flex:1">${f.last ? 'Last: ' + esc(f.last) : 'Next: ' + esc(f.next)}</span>${f.attendance >= 0 && f.attendance < 80 ? `<span class="pill red">${pct(f.attendance)} attend.</span>` : ''}${r.dirty ? '<span class="pill amber">Saving</span>' : ''}</div></div>${ring(f.overall, 52)}</div>`; }).join('')}</div>`;
   const empty = !Store.ready || (!all.length && Store.status !== 'Live') ? `<div class="empty">${icon('people')}Loading students…</div>` : !rows.length ? `<div class="empty">${icon('search')}No students match.</div>` : '';
   const actions = `<label class="search">${icon('search')}<input id="q" type="search" placeholder="Search name, ID or instructor" value="${esc(ui.query)}" aria-label="Search students"></label>
@@ -380,11 +393,14 @@ function students() {
     <button class="btn gold fab" id="newBtn">${icon('add')}<span>New student</span></button>`;
   const sortSel = `<select id="sort" class="sortsel" aria-label="Sort students"><option value="name">Sort: Name</option><option value="updated">Sort: Recently updated</option><option value="progress">Sort: Progress</option><option value="attendance">Sort: Lowest attendance</option><option value="flight">Sort: Last flight</option></select>`;
   app.innerHTML = frame('<h1>Students</h1>', `${rows.length}${rows.length !== all.length ? ' of ' + all.length : ''} students`, actions,
-    `<div class="toolbar">${chips}${sortSel}</div>${st ? `<div class="status">${esc(st)}</div>` : ''}${empty || table + cards}${rows.length > shown.length ? `<div class="more"><button class="btn" id="moreBtn">Show all ${rows.length}</button></div>` : ''}`);
+    `<label class="search msearch">${icon('search')}<input id="mq" type="search" placeholder="Search ${all.length} students" value="${esc(ui.query)}" aria-label="Search students"></label>${focus}<div class="toolbar">${chips}${sortSel}</div>${st ? `<div class="status">${esc(st)}</div>` : ''}${empty || table + cards}${rows.length > shown.length ? `<div class="more"><button class="btn" id="moreBtn">Show all ${rows.length}</button></div>` : ''}`);
   $('#sort').value = ui.sort;
   const qi = $('#q');
   qi.oninput = () => { ui.query = qi.value; ui.limit = 150; const pos = qi.selectionStart; students(); const n = $('#q'); n.focus(); n.setSelectionRange(pos, pos); };
   $('#searchBtn').onclick = () => { ui.searching = true; students(); $('#q').focus(); };
+  const mq = $('#mq');
+  mq.oninput = () => { ui.query = mq.value; ui.limit = 150; const pos = mq.selectionStart; students(); const n = $('#mq'); n.focus(); n.setSelectionRange(pos, pos); };
+  app.querySelector('.focus').onclick = e => { const b = e.target.closest('[data-focus]'); if (b) { ui.focus = b.dataset.focus; ui.limit = 150; students(); } };
   if (ui.searching && matchMedia('(max-width:760px)').matches) qi.onblur = () => { if (!qi.value) { ui.searching = false; setTimeout(students, 100); } };
   $('#sort').onchange = e => { ui.sort = e.target.value; students(); };
   $('#newBtn').onclick = newStudent;
@@ -579,7 +595,7 @@ function reportPage(uid) {
 // ---------- overview ----------
 function overview() {
   document.title = 'Overview · CPL Tracker';
-  const all = Store.all(), t = today(), month = t.slice(0, 8) + '01';
+  const all = Store.all(), month = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
   const d90 = new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10);
   let active = 0, mf = 0, mh = 0;
   const low = [], over = [], courses = new Map();
@@ -598,7 +614,7 @@ function overview() {
   const cs = [...courses].sort((a, b) => b[1] - a[1]).slice(0, 8), max = cs.length ? cs[0][1] : 1;
   app.innerHTML = frame('<h1>Overview</h1>', 'Across all students', '', `
    <section class="welcome"><h2>${h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'}${first ? ', ' + esc(first) : ''}</h2><p>Here’s where the school stands today.</p>
-   <div class="stats"><div><b>${all.length}</b><small>Students</small></div><div><b>${active}</b><small>Active (90 days)</small></div><div><b>${mf}</b><small>Flights this month</small></div><div class="gold"><b>${mh.toFixed(0)} h</b><small>Flown this month</small></div></div></section>
+   <div class="stats"><div><b>${all.length}</b><small>Students</small></div><div><b>${active}</b><small>Active (90 days)</small></div><div><b>${mf}</b><small>Flights, last 30 days</small></div><div class="gold"><b>${mh.toFixed(0)} h</b><small>Flown, last 30 days</small></div></div></section>
    <div class="grid g3" style="margin-top:16px">${sect('Attendance below 80%', 'Active students only', low, pct, 'red')}${sect('Over syllabus hours', 'Highest estimated overfly at an hour review', over, money, 'amber')}${sect('Recently updated', '', recent, r => ago(r.updated), '')}</div>
    <div class="card" style="margin-top:16px"><h2>Courses</h2>${cs.map(([c, n]) => `<div class="cbar"><div class="t"><span>${esc(c)}</span><b>${n}</b></div>${bar(n * 100 / max)}</div>`).join('')}</div>`);
   $('#content').onclick = e => { const o = e.target.closest('[data-open]'); if (o) go('student/' + o.dataset.open + '/overview'); };
@@ -820,6 +836,47 @@ const People = {
       });
   },
 };
+
+// ---------- quick search: Ctrl+K / ⌘K / "/" jumps to any student or page ----------
+window.Palette = undefined;
+const Palette = window.Palette = {
+  open() {
+    if (!Store.signedIn() || document.querySelector('.palette')) return;
+    const scrim = document.createElement('div'); scrim.className = 'scrim show';
+    const el = document.createElement('div'); el.className = 'palette'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Quick search');
+    el.innerHTML = `<label class="pin">${icon('search')}<input placeholder="Jump to a student or page…" aria-label="Quick search" autocomplete="off"><kbd>Esc</kbd></label><div class="pres" role="listbox"></div><div class="pfoot"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>Ctrl</kbd><kbd>K</kbd> anywhere</span></div>`;
+    document.body.append(scrim, el);
+    const inp = el.querySelector('input'), res = el.querySelector('.pres');
+    const pages = [['Students', 'students', 'people'], ['Overview', 'overview', 'dashboard'], ['Uploads', 'uploads', 'upload'], ['Account and people', 'account', 'person']];
+    let items = [], sel = 0;
+    const close = () => { el.remove(); scrim.remove(); document.removeEventListener('keydown', key, true); };
+    const draw = () => {
+      const q = norm(inp.value);
+      const st = Store.all().filter(r => !q || norm([r.state.name, r.state.studentId, r.state.instructor].join(' ')).includes(q)).sort((a, b) => (a.state.name || '').localeCompare(b.state.name || '')).slice(0, 8)
+        .map(r => ({h: 'student/' + r.uid + '/overview', html: `${avatar(r.state.name, 30)}<div><b>${esc(r.state.name || 'Unnamed')}</b><small>${esc([shortCourse(r.state.course), r.state.studentId && 'ID ' + r.state.studentId].filter(Boolean).join(' · '))}</small></div>`}));
+      const rep2 = q ? Store.all().filter(r => norm(r.state.name).includes(q)).slice(0, 2).map(r => ({h: 'report/' + r.uid, html: `<span class="pico">${icon('report')}</span><div><b>Report · ${esc(r.state.name)}</b><small>Attendance and progress PDF</small></div>`})) : [];
+      const pg = pages.filter(([l]) => !q || norm(l).includes(q)).map(([l, h, i]) => ({h, html: `<span class="pico">${icon(i)}</span><div><b>${l}</b><small>Page</small></div>`}));
+      items = [...st, ...rep2, ...pg]; sel = Math.min(sel, Math.max(0, items.length - 1));
+      res.innerHTML = items.map((x, i) => `<div class="pit ${i === sel ? 'on' : ''}" role="option" aria-selected="${i === sel}" data-i="${i}">${x.html}</div>`).join('') || '<div class="muted" style="padding:18px">Nothing found.</div>';
+    };
+    const key = e => {
+      if (e.key === 'Escape') { e.preventDefault(); close(); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(items.length - 1, sel + 1); draw(); res.querySelector('.on')?.scrollIntoView({block: 'nearest'}); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(0, sel - 1); draw(); res.querySelector('.on')?.scrollIntoView({block: 'nearest'}); }
+      else if (e.key === 'Enter' && items[sel]) { e.preventDefault(); close(); go(items[sel].h); }
+    };
+    document.addEventListener('keydown', key, true);
+    inp.oninput = () => { sel = 0; draw(); };
+    res.onclick = e => { const t = e.target.closest('[data-i]'); if (t) { close(); go(items[+t.dataset.i].h); } };
+    scrim.onclick = close;
+    draw(); inp.focus();
+  },
+};
+document.addEventListener('keydown', e => {
+  const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '');
+  if ((e.key === 'k' || e.key === 'K') && (e.ctrlKey || e.metaKey)) { e.preventDefault(); Palette.open(); }
+  else if (e.key === '/' && !typing && !document.querySelector('.sheet')) { e.preventDefault(); Palette.open(); }
+});
 
 // ---------- start ----------
 let renderTimer = null;

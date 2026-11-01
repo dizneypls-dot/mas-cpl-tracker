@@ -41,6 +41,36 @@ final class Ui {
 
     private Ui() {}
 
+    // Inter (bundled, SIL Open Font License, android/fonts) — the same typeface as the website.
+    private static Typeface regular, semi, bold;
+    static Typeface font(Context c, int weight) {
+        if (regular == null) {
+            try {
+                regular = Typeface.createFromAsset(c.getAssets(), "fonts/Inter-Regular.ttf");
+                semi = Typeface.createFromAsset(c.getAssets(), "fonts/Inter-SemiBold.ttf");
+                bold = Typeface.createFromAsset(c.getAssets(), "fonts/Inter-Bold.ttf");
+            } catch (Exception e) {
+                regular = Typeface.create("sans-serif", Typeface.NORMAL);
+                semi = Typeface.create("sans-serif-medium", Typeface.NORMAL);
+                bold = Typeface.create("sans-serif", Typeface.BOLD);
+            }
+        }
+        return weight >= 700 ? bold : weight >= 600 ? semi : regular;
+    }
+
+    // Navy-to-teal, as on the website's headers and student hero.
+    static GradientDrawable navyGrad(float radiusPx) {
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[] {0xFF0B2A4F, 0xFF123F6E, 0xFF16627A});
+        g.setCornerRadius(radiusPx);
+        return g;
+    }
+
+    static GradientDrawable goldGrad(float radiusPx) {
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[] {0xFFD9BF8C, 0xFFB8955A});
+        g.setCornerRadius(radiusPx);
+        return g;
+    }
+
     static int dp(Context c, float v) { return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, c.getResources().getDisplayMetrics())); }
 
     static TextView text(Context c, String s, float sp, int color, boolean bold) {
@@ -48,14 +78,16 @@ final class Ui {
         t.setText(s);
         t.setTextSize(sp);
         t.setTextColor(color);
-        t.setTypeface(Typeface.create("sans-serif" + (bold ? "-medium" : ""), Typeface.NORMAL));
+        t.setTypeface(font(c, bold ? 600 : 400));
+        t.setLetterSpacing(sp >= 20 ? -0.02f : -0.006f);
         t.setIncludeFontPadding(true);
         return t;
     }
 
     static TextView title(Context c, String s, float sp, int color) {
         TextView t = text(c, s, sp, color, false);
-        t.setTypeface(Typeface.create(Typeface.SERIF, Typeface.BOLD));
+        t.setTypeface(font(c, 700));
+        t.setLetterSpacing(-0.022f);
         return t;
     }
 
@@ -106,8 +138,8 @@ final class Ui {
 
     static LinearLayout card(Context c) {
         LinearLayout l = col(c);
-        l.setBackground(round(SURFACE, dp(c, 16)));
-        l.setElevation(dp(c, 1.5f));
+        l.setBackground(stroke(SURFACE, 0x0F0B2A4F, Math.max(1, dp(c, 0.6f)), dp(c, 18)));
+        l.setElevation(dp(c, 2f));
         l.setPadding(dp(c, 16), dp(c, 14), dp(c, 16), dp(c, 14));
         return l;
     }
@@ -135,7 +167,8 @@ final class Ui {
         b.setGravity(Gravity.CENTER);
         b.setPadding(dp(c, 18), dp(c, 12), dp(c, 18), dp(c, 12));
         b.setMinHeight(dp(c, 48));
-        b.setBackground(ripple(primary ? round(NAVY, dp(c, 12)) : stroke(SURFACE, LINE, dp(c, 1), dp(c, 12)), round(0xFF000000, dp(c, 12))));
+        b.setBackground(ripple(primary ? navyGrad(dp(c, 14)) : stroke(SURFACE, LINE, dp(c, 1), dp(c, 14)), round(0xFF000000, dp(c, 14))));
+        if (primary) b.setElevation(dp(c, 3));
         b.setOnClickListener(l);
         b.setClickable(true);
         b.setFocusable(true);
@@ -153,7 +186,7 @@ final class Ui {
     static TextView chip(Context c, String s, boolean on, View.OnClickListener l) {
         TextView t = text(c, s, 13, on ? Color.WHITE : TEXT, true);
         t.setPadding(dp(c, 14), dp(c, 8), dp(c, 14), dp(c, 8));
-        t.setBackground(ripple(on ? round(NAVY, dp(c, 99)) : stroke(SURFACE, LINE, dp(c, 1), dp(c, 99)), round(0xFF000000, dp(c, 99))));
+        t.setBackground(ripple(on ? navyGrad(dp(c, 99)) : stroke(SURFACE, LINE, dp(c, 1), dp(c, 99)), round(0xFF000000, dp(c, 99))));
         t.setOnClickListener(l);
         t.setSingleLine(true);
         return t;
@@ -241,7 +274,7 @@ final class Ui {
             track.setColor(trackColor);
             label.setColor(textColor);
             label.setTextAlign(Paint.Align.CENTER);
-            label.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+            label.setTypeface(font(c, 700));
         }
 
         void set(double pct, int color) {

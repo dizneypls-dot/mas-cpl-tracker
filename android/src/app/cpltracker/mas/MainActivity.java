@@ -45,7 +45,27 @@ public class MainActivity extends Activity implements Store.Listener {
     private LinearLayout nav;
     private String tab = "students";
     // students tab state
-    private String query = "", course = "", sort = "name";
+    private String query = "", course = "", sort = "name", focus = "";
+    private LinearLayout focusChips;
+    // Quick filters, same as the website: who needs someone to act.
+    private static final String[][] FOCUS = {{"", "Everyone"}, {"attention", "Needs attention"}, {"attendance", "Low attendance"}, {"hours", "Over syllabus hours"}, {"idle", "Not flown in 30 days"}};
+
+    private static boolean focusMatch(String k, Course.Figures f, double overCost, String d30, String d365) {
+        boolean low = f.attendance >= 0 && f.attendance < 80;
+        switch (k) {
+            case "attention": return low || overCost >= 1000;
+            case "attendance": return low;
+            case "hours": return overCost > 0;
+            case "idle": return !f.lastFlight.isEmpty() && f.lastFlight.compareTo(d30) < 0 && f.lastFlight.compareTo(d365) >= 0;
+            default: return true;
+        }
+    }
+
+    private static double overCost(JSONObject s) {
+        double c = 0;
+        for (int m : new int[] {10, 21, 30, 37}) { Course.Milestone x = Course.milestone(s, m); if (x.cost != null) c = Math.max(c, x.cost); }
+        return c;
+    }
     private boolean searching;
     private final List<Store.Rec> shown = new ArrayList<>();
     private final Map<String, Course.Figures> figs = new HashMap<>();
@@ -252,7 +272,7 @@ public class MainActivity extends Activity implements Store.Listener {
 
     private LinearLayout appBar(String title, String subtitle, View... actions) {
         LinearLayout bar = Ui.row(this);
-        bar.setBackgroundColor(Ui.NAVY);
+        bar.setBackground(Ui.navyGrad(0));
         bar.setPadding(Ui.dp(this, 20), Ui.dp(this, 14), Ui.dp(this, 8), Ui.dp(this, 14));
         LinearLayout tc = Ui.col(this);
         tc.addView(Ui.title(this, title, 22, Color.WHITE));
@@ -272,7 +292,7 @@ public class MainActivity extends Activity implements Store.Listener {
         LinearLayout page = Ui.col(this);
         if (searching) {
             LinearLayout bar = Ui.row(this);
-            bar.setBackgroundColor(Ui.NAVY);
+            bar.setBackground(Ui.navyGrad(0));
             bar.setPadding(Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 12), Ui.dp(this, 8));
             bar.addView(Ui.iconButton(this, R.drawable.ic_back, Color.WHITE, "Close search", v -> { searching = false; query = ""; render(); }));
             EditText q = Ui.input(this, "Search name, ID, instructor", query, InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
@@ -305,7 +325,9 @@ public class MainActivity extends Activity implements Store.Listener {
         LinearLayout chipWrap = Ui.col(this);
         chipWrap.setBackgroundColor(Ui.BG);
         chipWrap.setPadding(0, Ui.dp(this, 10), 0, 0);
-        chipWrap.addView(Ui.chipRow(this, chips));
+        focusChips = Ui.row(this);
+        chipWrap.addView(Ui.chipRow(this, focusChips));
+        chipWrap.addView(Ui.chipRow(this, chips), Ui.margins(this, 0, 8, 0, 0));
         syncLine = Ui.text(this, "", 12, Ui.AMBER, true);
         syncLine.setPadding(Ui.dp(this, 20), 0, Ui.dp(this, 20), Ui.dp(this, 4));
         chipWrap.addView(syncLine);
@@ -366,12 +388,30 @@ public class MainActivity extends Activity implements Store.Listener {
         String q = query.toLowerCase(Locale.ROOT).trim();
         shown.clear();
         figs.clear();
+        long t = Course.day(Course.today());
+        String d30 = Course.iso(t - 30), d365 = Course.iso(t - 365);
+        Map<String, Course.Figures> allF = new HashMap<>();
+        Map<String, Double> cost = new HashMap<>();
+        int[] counts = new int[FOCUS.length];
+        for (Store.Rec r : all) {
+            Course.Figures f = Course.figures(r.state);
+            double oc = overCost(r.state);
+            allF.put(r.uid, f); cost.put(r.uid, oc);
+            if (!course.isEmpty() && !course.equals(r.state.optString("course"))) continue;
+            for (int i = 1; i < FOCUS.length; i++) if (focusMatch(FOCUS[i][0], f, oc, d30, d365)) counts[i]++;
+        }
+        focusChips.removeAllViews();
+        for (int i = 0; i < FOCUS.length; i++) {
+            final String k = FOCUS[i][0];
+            Ui.gap(focusChips, Ui.chip(this, FOCUS[i][1] + (i == 0 ? "" : "  " + counts[i]), k.equals(focus), v -> { focus = k; filter(); }), 8);
+        }
         for (Store.Rec r : all) {
             JSONObject s = r.state;
             if (!course.isEmpty() && !course.equals(s.optString("course"))) continue;
+            if (!focusMatch(focus, allF.get(r.uid), cost.get(r.uid), d30, d365)) continue;
             if (!q.isEmpty() && !(s.optString("name") + " " + s.optString("studentId") + " " + s.optString("instructor") + " " + s.optString("course")).toLowerCase(Locale.ROOT).contains(q)) continue;
             shown.add(r);
-            figs.put(r.uid, Course.figures(s));
+            figs.put(r.uid, allF.get(r.uid));
         }
         Collections.sort(shown, (a, b) -> {
             Course.Figures fa = figs.get(a.uid), fb = figs.get(b.uid);

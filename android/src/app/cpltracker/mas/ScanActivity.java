@@ -132,7 +132,7 @@ public class ScanActivity extends Activity {
         LinearLayout root = Ui.col(this);
         root.setBackgroundColor(Ui.BG);
         LinearLayout bar = Ui.row(this);
-        bar.setBackgroundColor(Ui.NAVY);
+        bar.setBackground(Ui.navyGrad(0));
         bar.setPadding(Ui.dp(this, 4), Ui.dp(this, 10), Ui.dp(this, 16), Ui.dp(this, 10));
         bar.addView(Ui.iconButton(this, R.drawable.ic_back, Color.WHITE, "Back", v -> finish()));
         LinearLayout tc = Ui.col(this);

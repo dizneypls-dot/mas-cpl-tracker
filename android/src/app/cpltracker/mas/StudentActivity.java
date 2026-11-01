@@ -124,7 +124,7 @@ public class StudentActivity extends Activity implements Store.Listener {
 
     private void renderHeader(JSONObject s, Course.Figures f) {
         header.removeAllViews();
-        header.setBackgroundColor(Ui.NAVY);
+        header.setBackground(Ui.navyGrad(0));
         LinearLayout bar = Ui.row(this);
         bar.setPadding(Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4), 0);
         bar.addView(Ui.iconButton(this, R.drawable.ic_back, Color.WHITE, "Back", v -> finish()));

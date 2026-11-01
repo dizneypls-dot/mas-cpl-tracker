@@ -41,7 +41,7 @@ public class PeopleActivity extends Activity {
         LinearLayout root = Ui.col(this);
         root.setBackgroundColor(Color.parseColor("#f2f4f7"));
         LinearLayout bar = Ui.row(this);
-        bar.setBackgroundColor(Ui.NAVY);
+        bar.setBackground(Ui.navyGrad(0));
         bar.setPadding(Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 12), Ui.dp(this, 4));
         bar.addView(Ui.iconButton(this, R.drawable.ic_back, Color.WHITE, "Back", v -> finish()));
         bar.addView(Ui.text(this, "People", 18, Color.WHITE, true), new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));

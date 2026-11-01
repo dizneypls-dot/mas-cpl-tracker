@@ -32,7 +32,7 @@ public class ReportActivity extends Activity {
         LinearLayout root = Ui.col(this);
         root.setBackgroundColor(Color.parseColor("#f2f4f7"));
         LinearLayout bar = Ui.row(this);
-        bar.setBackgroundColor(Ui.NAVY);
+        bar.setBackground(Ui.navyGrad(0));
         bar.setPadding(Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 12), Ui.dp(this, 4));
         bar.addView(Ui.iconButton(this, R.drawable.ic_back, Color.WHITE, "Back", v -> finish()));
         LinearLayout t = Ui.col(this);
