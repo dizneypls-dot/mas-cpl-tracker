@@ -1,6 +1,6 @@
 {
- "versionCode": 13,
- "versionName": "2.2.1",
+ "versionCode": 14,
+ "versionName": "2.2.2",
  "apk": "CPLTracker.apk",
- "notes": "Now at coursetracker.online. Attendance and progress report: open a student and tap the report button."
+ "notes": "Attendance now uses hours against 20 h a week from the Aviation 1 in 60 record (as in the report). Students without a record show \u2014 instead of 100%."
 }
